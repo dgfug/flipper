@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
  * @flow strict-local
  */
 
-import {bufferToBlob} from 'flipper';
 import {RequiredParametersDialog} from './components';
 import {
   removeBookmarkFromDB,
@@ -73,8 +72,14 @@ export function plugin(client: PluginClient<Events, Methods>) {
       draft.unshift(navigationEvent);
     });
 
-    const screenshot: Buffer = await client.device.screenshot();
-    const blobURL = URL.createObjectURL(bufferToBlob(screenshot));
+    const screenshot = await client.device.screenshot();
+    if (!screenshot) {
+      console.warn(
+        '[navigation] Could not retrieve valid screenshot from the device.',
+      );
+      return;
+    }
+    const blobURL = URL.createObjectURL(new Blob([screenshot.buffer]));
     // this process is async, make sure we update the correct one..
     const navigationEventIndex = navigationEvents
       .get()
@@ -184,6 +189,3 @@ export function plugin(client: PluginClient<Events, Methods>) {
     },
   };
 }
-
-/* @scarf-info: do not remove, more info: https://fburl.com/scarf */
-/* @scarf-generated: flipper-plugin index.js.template 0bfa32e5-fb15-4705-81f8-86260a1f3f8e */

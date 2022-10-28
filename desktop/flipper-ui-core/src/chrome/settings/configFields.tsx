@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,10 +16,9 @@ import {
   colors,
   Glyph,
 } from '../../ui';
-import React, {useState} from 'react';
-import {promises as fs} from 'fs';
-import {theme} from 'flipper-plugin';
-import {getRenderHostInstance} from '../../RenderHost';
+import React, {useState, useEffect} from 'react';
+import {getFlipperLib, theme} from 'flipper-plugin';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 export const ConfigFieldContainer = styled(FlexRow)({
   paddingLeft: 10,
@@ -70,14 +69,17 @@ export function FilePathConfigField(props: {
   const renderHost = getRenderHostInstance();
   const [value, setValue] = useState(props.defaultValue);
   const [isValid, setIsValid] = useState(true);
-  fs.stat(value)
-    .then((stat) => props.isRegularFile !== stat.isDirectory())
-    .then((valid) => {
-      if (valid !== isValid) {
-        setIsValid(valid);
+
+  useEffect(() => {
+    (async function () {
+      try {
+        const stat = await getFlipperLib().remoteServerContext.fs.stat(value);
+        setIsValid(props.isRegularFile !== stat.isDirectory);
+      } catch (_) {
+        setIsValid(false);
       }
-    })
-    .catch((_) => setIsValid(false));
+    })();
+  }, [props.isRegularFile, value]);
 
   return (
     <ConfigFieldContainer>
@@ -89,8 +91,9 @@ export function FilePathConfigField(props: {
         onChange={(e) => {
           setValue(e.target.value);
           props.onChange(e.target.value);
-          fs.stat(e.target.value)
-            .then((stat) => stat.isDirectory())
+          getFlipperLib()
+            .remoteServerContext.fs.stat(e.target.value)
+            .then((stat) => stat.isDirectory)
             .then((valid) => {
               if (valid !== isValid) {
                 setIsValid(valid);
@@ -147,6 +150,63 @@ export function ConfigText(props: {content: string; frozen?: boolean}) {
   return (
     <ConfigFieldContainer>
       <InfoText>{props.content}</InfoText>
+      {props.frozen && <GrayedOutOverlay />}
+    </ConfigFieldContainer>
+  );
+}
+
+export function URLConfigField(props: {
+  label: string;
+  resetValue?: string;
+  defaultValue: string;
+  onChange: (path: string) => void;
+  frozen?: boolean;
+}) {
+  const [value, setValue] = useState(props.defaultValue);
+  const [isValid, setIsValid] = useState(true);
+
+  useEffect(() => {
+    try {
+      const url = new URL(value);
+      const isValidUrl =
+        ['http:', 'https:'].includes(url.protocol) &&
+        url.href.startsWith(value);
+      setIsValid(isValidUrl);
+    } catch (_) {
+      setIsValid(false);
+    }
+  }, [value]);
+
+  return (
+    <ConfigFieldContainer>
+      <InfoText>{props.label}</InfoText>
+      <FileInputBox
+        placeholder={props.label}
+        value={value}
+        isValid={isValid}
+        onChange={(e) => {
+          setValue(e.target.value);
+          props.onChange(e.target.value);
+        }}
+      />
+
+      {props.resetValue && (
+        <FlexColumn
+          title={`Reset to default value ${props.resetValue}`}
+          onClick={() => {
+            setValue(props.resetValue!);
+            props.onChange(props.resetValue!);
+          }}>
+          <CenteredGlyph
+            color={theme.primaryColor}
+            name="undo"
+            variant="outline"
+          />
+        </FlexColumn>
+      )}
+      {isValid ? null : (
+        <CenteredGlyph name="caution-triangle" color={colors.yellow} />
+      )}
       {props.frozen && <GrayedOutOverlay />}
     </ConfigFieldContainer>
   );

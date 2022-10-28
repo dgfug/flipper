@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,15 +7,13 @@
  * @format
  */
 
-import {Logger} from 'flipper-common';
+import {Logger, Settings, ActivatablePluginDetails} from 'flipper-common';
 import Client from './Client';
 import {Component} from 'react';
-import BaseDevice from './devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import {StaticView} from './reducers/connections';
 import {State as ReduxState} from './reducers';
 import {DEFAULT_MAX_QUEUE_SIZE} from './reducers/pluginMessageQueue';
-import {ActivatablePluginDetails} from 'flipper-plugin-lib';
-import {Settings} from './reducers/settings';
 import {
   Notification,
   Idler,
@@ -112,7 +110,6 @@ export abstract class FlipperBasePlugin<
   static version: string = '';
   static icon: string | null = null;
   static gatekeeper: string | null = null;
-  static isBundled: boolean;
   static details: ActivatablePluginDetails;
   static keyboardActions: KeyboardActions | null;
   static screenshot: string | null;

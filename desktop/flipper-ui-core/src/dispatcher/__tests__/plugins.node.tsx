@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,28 +7,20 @@
  * @format
  */
 
-jest.mock('../../../../app/src/defaultPlugins');
-jest.mock('../../utils/loadDynamicPlugins');
-import dispatcher, {
-  getDynamicPlugins,
-  checkDisabled,
-  checkGK,
-  createRequirePluginFunction,
-  getLatestCompatibleVersionOfEachPlugin,
-} from '../plugins';
-import {BundledPluginDetails, InstalledPluginDetails} from 'flipper-plugin-lib';
-import path from 'path';
+import dispatcher, {requirePluginInternal} from '../plugins';
+import {InstalledPluginDetails} from 'flipper-common';
 import {createRootReducer, State} from '../../reducers/index';
 import {getLogger} from 'flipper-common';
 import configureStore from 'redux-mock-store';
-import {TEST_PASSING_GK, TEST_FAILING_GK} from '../../fb-stubs/GK';
 import TestPlugin from './TestPlugin';
-import {resetConfigForTesting} from '../../utils/processConfig';
 import {_SandyPluginDefinition} from 'flipper-plugin';
-import {mocked} from 'ts-jest/utils';
-import loadDynamicPlugins from '../../utils/loadDynamicPlugins';
+import {
+  getRenderHostInstance,
+  createRequirePluginFunction,
+} from 'flipper-frontend-core';
+import path from 'path';
 
-const loadDynamicPluginsMock = mocked(loadDynamicPlugins);
+let loadDynamicPluginsMock: jest.Mock;
 
 const mockStore = configureStore<State, {}>([])(
   createRootReducer()(undefined, {type: 'INIT'}),
@@ -46,23 +38,13 @@ const sampleInstalledPluginDetails: InstalledPluginDetails = {
   title: 'Sample',
   dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample',
   entry: 'this/path/does not/exist',
-  isBundled: false,
   isActivatable: true,
 };
 
-const sampleBundledPluginDetails: BundledPluginDetails = {
-  ...sampleInstalledPluginDetails,
-  id: 'SampleBundled',
-  isBundled: true,
-};
-
 beforeEach(() => {
-  resetConfigForTesting();
+  loadDynamicPluginsMock = getRenderHostInstance().flipperServer.exec =
+    jest.fn();
   loadDynamicPluginsMock.mockResolvedValue([]);
-});
-
-afterEach(() => {
-  loadDynamicPluginsMock.mockClear();
 });
 
 test('dispatcher dispatches REGISTER_PLUGINS', async () => {
@@ -71,79 +53,9 @@ test('dispatcher dispatches REGISTER_PLUGINS', async () => {
   expect(actions.map((a) => a.type)).toContain('REGISTER_PLUGINS');
 });
 
-test('getDynamicPlugins returns empty array on errors', async () => {
-  const loadDynamicPluginsMock = mocked(loadDynamicPlugins);
-  loadDynamicPluginsMock.mockRejectedValue(new Error('ooops'));
-  const res = await getDynamicPlugins();
-  expect(res).toEqual([]);
-});
-
-test('checkDisabled', () => {
-  const disabledPlugin = 'pluginName';
-  const config = {disabledPlugins: [disabledPlugin]};
-  const orig = process.env.CONFIG;
-  try {
-    process.env.CONFIG = JSON.stringify(config);
-    const disabled = checkDisabled([]);
-
-    expect(
-      disabled({
-        ...sampleBundledPluginDetails,
-        name: 'other Name',
-        version: '1.0.0',
-      }),
-    ).toBeTruthy();
-
-    expect(
-      disabled({
-        ...sampleBundledPluginDetails,
-        name: disabledPlugin,
-        version: '1.0.0',
-      }),
-    ).toBeFalsy();
-  } finally {
-    process.env.CONFIG = orig;
-  }
-});
-
-test('checkGK for plugin without GK', () => {
-  expect(
-    checkGK([])({
-      ...sampleBundledPluginDetails,
-      name: 'pluginID',
-      version: '1.0.0',
-    }),
-  ).toBeTruthy();
-});
-
-test('checkGK for passing plugin', () => {
-  expect(
-    checkGK([])({
-      ...sampleBundledPluginDetails,
-      name: 'pluginID',
-      gatekeeper: TEST_PASSING_GK,
-      version: '1.0.0',
-    }),
-  ).toBeTruthy();
-});
-
-test('checkGK for failing plugin', () => {
-  const gatekeepedPlugins: InstalledPluginDetails[] = [];
-  const name = 'pluginID';
-  const plugins = checkGK(gatekeepedPlugins)({
-    ...sampleBundledPluginDetails,
-    name,
-    gatekeeper: TEST_FAILING_GK,
-    version: '1.0.0',
-  });
-
-  expect(plugins).toBeFalsy();
-  expect(gatekeepedPlugins[0].name).toEqual(name);
-});
-
-test('requirePlugin returns null for invalid requires', () => {
-  const requireFn = createRequirePluginFunction([], require);
-  const plugin = requireFn({
+test('requirePluginInternal returns null for invalid requires', async () => {
+  const requireFn = createRequirePluginFunction(requirePluginInternal)([]);
+  const plugin = await requireFn({
     ...sampleInstalledPluginDetails,
     name: 'pluginID',
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample',
@@ -154,10 +66,10 @@ test('requirePlugin returns null for invalid requires', () => {
   expect(plugin).toBeNull();
 });
 
-test('requirePlugin loads plugin', () => {
+test('requirePluginInternal loads plugin', async () => {
   const name = 'pluginID';
-  const requireFn = createRequirePluginFunction([], require);
-  const plugin = requireFn({
+  const requireFn = createRequirePluginFunction(requirePluginInternal)([]);
+  const plugin = await requireFn({
     ...sampleInstalledPluginDetails,
     name,
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample',
@@ -167,6 +79,7 @@ test('requirePlugin loads plugin', () => {
   expect(plugin).not.toBeNull();
   expect(Object.keys(plugin as any)).toEqual([
     'id',
+    'css',
     'details',
     'isDevicePlugin',
     'module',
@@ -176,64 +89,10 @@ test('requirePlugin loads plugin', () => {
   expect(plugin!.id).toBe(TestPlugin.id);
 });
 
-test('newest version of each plugin is used', () => {
-  const bundledPlugins: BundledPluginDetails[] = [
-    {
-      ...sampleBundledPluginDetails,
-      id: 'TestPlugin1',
-      name: 'flipper-plugin-test1',
-      version: '0.1.0',
-    },
-    {
-      ...sampleBundledPluginDetails,
-      id: 'TestPlugin2',
-      name: 'flipper-plugin-test2',
-      version: '0.1.0-alpha.201',
-    },
-  ];
-  const installedPlugins: InstalledPluginDetails[] = [
-    {
-      ...sampleInstalledPluginDetails,
-      id: 'TestPlugin2',
-      name: 'flipper-plugin-test2',
-      version: '0.1.0-alpha.21',
-      dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test2',
-      entry: './test/index.js',
-    },
-    {
-      ...sampleInstalledPluginDetails,
-      id: 'TestPlugin1',
-      name: 'flipper-plugin-test1',
-      version: '0.10.0',
-      dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test1',
-      entry: './test/index.js',
-    },
-  ];
-  const filteredPlugins = getLatestCompatibleVersionOfEachPlugin([
-    ...bundledPlugins,
-    ...installedPlugins,
-  ]);
-  expect(filteredPlugins).toHaveLength(2);
-  expect(filteredPlugins).toContainEqual({
-    ...sampleInstalledPluginDetails,
-    id: 'TestPlugin1',
-    name: 'flipper-plugin-test1',
-    version: '0.10.0',
-    dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test1',
-    entry: './test/index.js',
-  });
-  expect(filteredPlugins).toContainEqual({
-    ...sampleBundledPluginDetails,
-    id: 'TestPlugin2',
-    name: 'flipper-plugin-test2',
-    version: '0.1.0-alpha.201',
-  });
-});
-
-test('requirePlugin loads valid Sandy plugin', () => {
+test('requirePluginInternal loads valid Sandy plugin', async () => {
   const name = 'pluginID';
-  const requireFn = createRequirePluginFunction([], require);
-  const plugin = requireFn({
+  const requireFn = createRequirePluginFunction(requirePluginInternal)([]);
+  const plugin = (await requireFn({
     ...sampleInstalledPluginDetails,
     name,
     dir: path.join(
@@ -246,14 +105,13 @@ test('requirePlugin loads valid Sandy plugin', () => {
     ),
     version: '1.0.0',
     flipperSDKVersion: '0.0.0',
-  }) as _SandyPluginDefinition;
+  })) as _SandyPluginDefinition;
   expect(plugin).not.toBeNull();
   expect(plugin).toBeInstanceOf(_SandyPluginDefinition);
   expect(plugin.id).toBe('Sample');
   expect(plugin.details).toMatchObject({
     flipperSDKVersion: '0.0.0',
     id: 'Sample',
-    isBundled: false,
     main: 'dist/bundle.js',
     name: 'pluginID',
     source: 'src/index.js',
@@ -267,11 +125,13 @@ test('requirePlugin loads valid Sandy plugin', () => {
   expect(typeof plugin.asPluginModule().plugin).toBe('function');
 });
 
-test('requirePlugin errors on invalid Sandy plugin', () => {
+test('requirePluginInternal errors on invalid Sandy plugin', async () => {
   const name = 'pluginID';
   const failedPlugins: any[] = [];
-  const requireFn = createRequirePluginFunction(failedPlugins, require);
-  requireFn({
+  const requireFn = createRequirePluginFunction(requirePluginInternal)(
+    failedPlugins,
+  );
+  await requireFn({
     ...sampleInstalledPluginDetails,
     name,
     // Intentionally the wrong file:
@@ -285,10 +145,10 @@ test('requirePlugin errors on invalid Sandy plugin', () => {
   );
 });
 
-test('requirePlugin loads valid Sandy Device plugin', () => {
+test('requirePluginInternal loads valid Sandy Device plugin', async () => {
   const name = 'pluginID';
-  const requireFn = createRequirePluginFunction([], require);
-  const plugin = requireFn({
+  const requireFn = createRequirePluginFunction(requirePluginInternal)([]);
+  const plugin = (await requireFn({
     ...sampleInstalledPluginDetails,
     pluginType: 'device',
     name,
@@ -302,14 +162,13 @@ test('requirePlugin loads valid Sandy Device plugin', () => {
     ),
     version: '1.0.0',
     flipperSDKVersion: '0.0.0',
-  }) as _SandyPluginDefinition;
+  })) as _SandyPluginDefinition;
   expect(plugin).not.toBeNull();
   expect(plugin).toBeInstanceOf(_SandyPluginDefinition);
   expect(plugin.id).toBe('Sample');
   expect(plugin.details).toMatchObject({
     flipperSDKVersion: '0.0.0',
     id: 'Sample',
-    isBundled: false,
     main: 'dist/bundle.js',
     name: 'pluginID',
     source: 'src/index.js',

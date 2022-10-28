@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,7 +29,7 @@ import {AppInspect} from './appinspect/AppInspect';
 import PluginContainer from '../PluginContainer';
 import {ContentContainer} from './ContentContainer';
 import {Notification} from './notification/Notification';
-import ChangelogSheet, {hasNewChangesToShow} from '../chrome/ChangelogSheet';
+import {showChangelog} from '../chrome/ChangelogSheet';
 import PlatformSelectWizard, {
   hasPlatformWizardBeenDone,
 } from '../chrome/PlatformSelectWizard';
@@ -40,7 +40,7 @@ import fbConfig from '../fb-stubs/config';
 import {isFBEmployee} from '../utils/fbEmployee';
 import {notification} from 'antd';
 import isProduction from '../utils/isProduction';
-import {getRenderHostInstance} from '../RenderHost';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 export type ToplevelNavItem =
   | 'appinspect'
@@ -98,15 +98,19 @@ export function SandyApp() {
     })`;
 
     registerStartupTime(logger);
-    if (hasNewChangesToShow(window.localStorage)) {
-      Dialog.showModal((onHide) => <ChangelogSheet onHide={onHide} recent />);
-    }
 
     if (hasPlatformWizardBeenDone(window.localStorage)) {
       Dialog.showModal((onHide) => (
-        <PlatformSelectWizard onHide={onHide} platform={process.platform} />
+        <PlatformSelectWizard
+          onHide={onHide}
+          platform={
+            getRenderHostInstance().serverConfig.environmentInfo.os.platform
+          }
+        />
       ));
     }
+
+    showChangelog(true);
 
     // don't warn about logger, even with a new logger we don't want to re-register
     // eslint-disable-next-line
@@ -220,6 +224,7 @@ const outOfContentsContainer = (
 const MainContainer = styled(Layout.Container)({
   background: theme.backgroundWash,
   padding: `${theme.space.large}px ${theme.space.large}px ${theme.space.large}px 0`,
+  overflow: 'hidden',
 });
 
 const RootElement = styled.div({
@@ -230,8 +235,7 @@ RootElement.displayName = 'SandyAppRootElement';
 
 function registerStartupTime(logger: Logger) {
   // track time since launch
-  const [s, ns] = process.hrtime();
-  const launchEndTime = s * 1e3 + ns / 1e6;
+  const launchEndTime = performance.now();
   const renderHost = getRenderHostInstance();
   renderHost.onIpcEvent('getLaunchTime', (launchStartTime: number) => {
     logger.track('performance', 'launchTime', launchEndTime - launchStartTime);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,7 +11,7 @@ import unicodeSubstring from 'unicode-substring';
 import type {Crash} from './index';
 import {DevicePluginClient} from 'flipper-plugin';
 
-export const UNKNOWN_CRASH_REASON = 'Cannot figure out the cause';
+export const UNKNOWN_CRASH_REASON = 'Unknown';
 
 function truncate(baseString: string, numOfChars: number): string {
   if (baseString.length <= numOfChars) {

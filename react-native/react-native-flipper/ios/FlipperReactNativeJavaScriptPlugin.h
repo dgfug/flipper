@@ -1,11 +1,11 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#if DEBUG
+#if defined(DEBUG) || defined(FB_SONARKIT_ENABLED)
 #import <FlipperKit/FlipperConnection.h>
 #import <FlipperKit/FlipperPlugin.h>
 
@@ -30,4 +30,4 @@ NS_ASSUME_NONNULL_BEGIN
 
 NS_ASSUME_NONNULL_END
 
-#endif
+#endif // DEBUG || FB_SONARKIT_ENABLED

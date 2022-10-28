@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
  */
 
 // Used responsibly.
-import flipperServer from './flipperServer';
 import application from './application';
 import tracking from './tracking';
 import notifications from './notifications';
@@ -16,10 +15,11 @@ import plugins from './plugins';
 import user from './fb-stubs/user';
 import pluginManager from './pluginManager';
 import reactNative from './reactNative';
-import pluginMarketplace from './fb-stubs/pluginMarketplace';
+import pluginMarketplace from './pluginMarketplace';
 import pluginDownloads from './pluginDownloads';
 import info from '../utils/info';
 import pluginChangeListener from './pluginsChangeListener';
+import pluginsSourceUpdateListener from './pluginsSourceUpdateListener';
 
 import {Logger} from 'flipper-common';
 import {Store} from '../reducers/index';
@@ -32,7 +32,6 @@ export default function (store: Store, logger: Logger): () => Promise<void> {
   const dispatchers: Array<Dispatcher> = [
     application,
     tracking,
-    flipperServer,
     notifications,
     plugins,
     user,
@@ -42,6 +41,7 @@ export default function (store: Store, logger: Logger): () => Promise<void> {
     pluginDownloads,
     info,
     pluginChangeListener,
+    pluginsSourceUpdateListener,
   ].filter(notNull);
   const globalCleanup = dispatchers
     .map((dispatcher) => dispatcher(store, logger))

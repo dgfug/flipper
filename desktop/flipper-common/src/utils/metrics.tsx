@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -122,6 +122,29 @@ export function tryCatchReportPluginFailures<T>(
 ): T {
   try {
     const result = closure();
+    logPluginSuccessRate(name, plugin, {kind: 'success'});
+    return result;
+  } catch (e) {
+    logPluginSuccessRate(name, plugin, {
+      kind: 'failure',
+      supportedOperation: !(e instanceof UnsupportedError),
+      error: e,
+    });
+    throw e;
+  }
+}
+
+/*
+ * Wraps a closure, preserving it's functionality but logging the success or
+ failure state of it.
+ */
+export async function tryCatchReportPluginFailuresAsync<T>(
+  closure: () => Promise<T>,
+  name: string,
+  plugin: string,
+): Promise<T> {
+  try {
+    const result = await closure();
     logPluginSuccessRate(name, plugin, {kind: 'success'});
     return result;
   } catch (e) {

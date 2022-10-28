@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,8 @@
  */
 @import '../node_modules/antd/dist/antd.less';
 @import './typography.less';
+// Breaks publish-static-docs-flipper-diff job on CI (D40717045)
+// @import (inline) './plugins/public/node_modules/react-complex-tree/lib/style.css';
 /* Based on: https://www.figma.com/file/4e6BMdm2SuZ1L7FSuOPQVC/Flipper?node-id=620%3A84636 */
 @background-transparent-hover: rgba(0, 0, 0, 0.1);
 
@@ -52,6 +54,7 @@
   --flipper-disabled-color: @disabled-color;
   --flipper-background-default: @background-default;
   --flipper-background-wash: @background-wash;
+  --flipper-primary-background-wash: mix(@primary-color, @background-default, 25%);
   --flipper-button-default-background: @button-default-background;
   --flipper-background-transparent-hover: @background-transparent-hover;
   --flipper-divider-color: @divider-color;

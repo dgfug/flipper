@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -25,6 +25,12 @@ public interface FlipperConnection {
    * parameter.
    */
   void send(String method, FlipperArray params);
+
+  /**
+   * Call a remote method on the Flipper desktop application, passing an optional JSON string as a
+   * parameter.
+   */
+  void send(String method, String message);
 
   /** Report client error with reason and stacktrace as an argument */
   void reportErrorWithMetadata(String reason, String stackTrace);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,7 +14,6 @@ export {produce} from 'immer';
 export * from './ui/index';
 export {textContent, sleep} from 'flipper-plugin';
 export * from './utils/jsonTypes';
-export {default as GK, loadGKs, loadDistilleryGK} from './fb-stubs/GK';
 export {default as createPaste} from './fb-stubs/createPaste';
 export {
   internGraphGETAPIRequest,
@@ -28,16 +27,14 @@ export {PluginClient, Props, KeyboardActions} from './plugin';
 export {default as Client} from './Client';
 export {reportUsage} from 'flipper-common';
 export {default as promiseTimeout} from './utils/promiseTimeout';
-export {bufferToBlob} from './utils/screenshot';
 export {getPluginKey} from './utils/pluginKey';
 export {Notification, Idler} from 'flipper-plugin';
 export {IdlerImpl} from './utils/Idler';
 export {Store, State as ReduxState} from './reducers/index';
-export {default as BaseDevice} from './devices/BaseDevice';
+export {BaseDevice, ArchivedDevice, TestDevice} from 'flipper-frontend-core';
 export {default as isProduction} from './utils/isProduction';
 export {DetailSidebar} from 'flipper-plugin';
-export {default as Device} from './devices/BaseDevice';
-export {default as ArchivedDevice} from './devices/ArchivedDevice';
+export {BaseDevice as Device} from 'flipper-frontend-core';
 export {DeviceOS as OS} from 'flipper-plugin';
 export {default as Button} from './ui/components/Button';
 export {default as ToggleButton} from './ui/components/ToggleSwitch';
@@ -73,8 +70,6 @@ export {default as Checkbox} from './ui/components/Checkbox';
 export {default as Orderable} from './ui/components/Orderable';
 export {Component, PureComponent} from 'react';
 export {default as ContextMenu} from './ui/components/ContextMenu';
-export {FileListFiles} from './ui/components/FileList';
-export {default as FileList} from './ui/components/FileList';
 export {default as View} from './ui/components/View';
 export {default as Sidebar} from './ui/components/Sidebar';
 export {default as FlexBox} from './ui/components/FlexBox';
@@ -92,7 +87,6 @@ export {default as StatusIndicator} from './ui/components/StatusIndicator';
 export {default as HorizontalRule} from './ui/components/HorizontalRule';
 export {default as Label} from './ui/components/Label';
 export {default as Heading} from './ui/components/Heading';
-export * from './utils/pathUtils';
 export {Filter} from './ui/components/filter/types';
 export {default as StackTrace} from './ui/components/StackTrace';
 export {
@@ -118,15 +112,12 @@ export {
 } from 'flipper-plugin';
 export {ElementFramework} from './ui/components/elements-inspector/ElementFramework';
 export {InspectorSidebar} from './ui/components/elements-inspector/sidebar';
-export {default as FileSelector} from './ui/components/FileSelector';
 export {getFlipperMediaCDN, appendAccessTokenToUrl} from './fb-stubs/user';
 export {Rect} from './utils/geometry';
 export {Logger} from 'flipper-common';
 export {getLogger} from 'flipper-common';
 export {callVSCode} from './utils/vscodeUtils';
 export {IDEFileResolver, IDEType} from './fb-stubs/IDEFileResolver';
-export {renderMockFlipperWithPlugin} from './test-utils/createMockFlipperWithPlugin';
 export {Tracked} from 'flipper-plugin'; // To be able to use it in legacy plugins
 export {RequireLogin} from './ui/components/RequireLogin';
-export {TestDevice} from './test-utils/TestDevice';
 export {connect} from 'react-redux';

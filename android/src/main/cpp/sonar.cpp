@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,6 +13,7 @@
 #include <fb/fbjni.h>
 #endif
 
+#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventBaseManager.h>
@@ -23,6 +24,7 @@
 #include <Flipper/FlipperClient.h>
 #include <Flipper/FlipperConnection.h>
 #include <Flipper/FlipperConnectionManager.h>
+#include <Flipper/FlipperFollyScheduler.h>
 #include <Flipper/FlipperResponder.h>
 #include <Flipper/FlipperSocket.h>
 #include <Flipper/FlipperSocketProvider.h>
@@ -41,6 +43,9 @@ void handleException(const std::exception& e) {
   message += e.what();
   __android_log_write(ANDROID_LOG_ERROR, "FLIPPER", message.c_str());
 }
+
+std::unique_ptr<facebook::flipper::Scheduler> sonarScheduler;
+std::unique_ptr<facebook::flipper::Scheduler> connectionScheduler;
 
 class JEventBase : public jni::HybridClass<JEventBase> {
  public:
@@ -251,7 +256,10 @@ class JFlipperWebSocket : public facebook::flipper::FlipperSocket {
         connectionContextStore_(connectionContextStore) {}
 
   virtual ~JFlipperWebSocket() {
-    disconnect();
+    if (socket_ != nullptr) {
+      socket_->disconnect();
+      socket_ = nullptr;
+    }
   }
 
   virtual void setEventHandler(SocketEventHandler eventHandler) override {
@@ -282,21 +290,21 @@ class JFlipperWebSocket : public facebook::flipper::FlipperSocket {
 
     auto secure = endpoint_.secure;
 
-    bool fullfilled = false;
     std::promise<bool> promise;
     auto connected = promise.get_future();
 
+    connecting_ = true;
+
     socket_ = make_global(JFlipperSocketImpl::create(connectionURL));
     socket_->setEventHandler(JFlipperSocketEventHandlerImpl::newObjectCxxArgs(
-        [&fullfilled, &promise, eventHandler = eventHandler_](
-            SocketEvent event) {
+        [this, &promise, eventHandler = eventHandler_](SocketEvent event) {
           /**
              Only fulfill the promise the first time the event handler is used.
              If the open event is received, then set the promise value to true.
              For any other event, consider a failure and set to false.
            */
-          if (!fullfilled) {
-            fullfilled = true;
+          if (this->connecting_) {
+            this->connecting_ = false;
             if (event == SocketEvent::OPEN) {
               promise.set_value(true);
             } else if (event == SocketEvent::SSL_ERROR) {
@@ -338,6 +346,7 @@ class JFlipperWebSocket : public facebook::flipper::FlipperSocket {
     if (state == std::future_status::ready) {
       return connected.get();
     }
+
     disconnect();
     return false;
   }
@@ -399,6 +408,7 @@ class JFlipperWebSocket : public facebook::flipper::FlipperSocket {
   facebook::flipper::SocketMessageHandler messageHandler_;
 
   jni::global_ref<JFlipperSocketImpl> socket_;
+  bool connecting_;
 };
 
 class JFlipperSocketProvider : public facebook::flipper::FlipperSocketProvider {
@@ -407,7 +417,7 @@ class JFlipperSocketProvider : public facebook::flipper::FlipperSocketProvider {
   virtual std::unique_ptr<facebook::flipper::FlipperSocket> create(
       facebook::flipper::FlipperConnectionEndpoint endpoint,
       std::unique_ptr<facebook::flipper::FlipperSocketBasePayload> payload,
-      folly::EventBase* eventBase) override {
+      facebook::flipper::Scheduler* scheduler) override {
     return std::make_unique<JFlipperWebSocket>(
         std::move(endpoint), std::move(payload));
     ;
@@ -415,7 +425,7 @@ class JFlipperSocketProvider : public facebook::flipper::FlipperSocketProvider {
   virtual std::unique_ptr<facebook::flipper::FlipperSocket> create(
       FlipperConnectionEndpoint endpoint,
       std::unique_ptr<FlipperSocketBasePayload> payload,
-      folly::EventBase* eventBase,
+      facebook::flipper::Scheduler* scheduler,
       ConnectionContextStore* connectionContextStore) override {
     return std::make_unique<JFlipperWebSocket>(
         std::move(endpoint), std::move(payload), connectionContextStore);
@@ -504,12 +514,17 @@ class JFlipperConnectionImpl
     registerHybrid({
         makeNativeMethod("sendObject", JFlipperConnectionImpl::sendObject),
         makeNativeMethod("sendArray", JFlipperConnectionImpl::sendArray),
+        makeNativeMethod("sendRaw", JFlipperConnectionImpl::sendRaw),
         makeNativeMethod("reportError", JFlipperConnectionImpl::reportError),
         makeNativeMethod(
             "reportErrorWithMetadata",
             JFlipperConnectionImpl::reportErrorWithMetadata),
         makeNativeMethod("receive", JFlipperConnectionImpl::receive),
     });
+  }
+
+  void sendRaw(const std::string method, const std::string params) {
+    _connection->sendRaw(std::move(method), std::move(params));
   }
 
   void sendObject(
@@ -934,6 +949,11 @@ class JFlipperClient : public jni::HybridClass<JFlipperClient> {
       const std::string app,
       const std::string appId,
       const std::string privateAppDirectory) {
+    sonarScheduler =
+        std::make_unique<FollyScheduler>(callbackWorker->eventBase());
+    connectionScheduler =
+        std::make_unique<FollyScheduler>(connectionWorker->eventBase());
+
     FlipperClient::init(
         {{std::move(host),
           std::move(os),
@@ -942,15 +962,14 @@ class JFlipperClient : public jni::HybridClass<JFlipperClient> {
           std::move(app),
           std::move(appId),
           std::move(privateAppDirectory)},
-         callbackWorker->eventBase(),
-         connectionWorker->eventBase(),
+         sonarScheduler.get(),
+         connectionScheduler.get(),
          insecurePort,
          securePort,
          altInsecurePort,
          altSecurePort});
-    // To switch to a WebSocket provider, uncomment the line below.
-    //    facebook::flipper::FlipperSocketProvider::setDefaultProvider(
-    //        std::make_unique<JFlipperSocketProvider>());
+    facebook::flipper::FlipperSocketProvider::setDefaultProvider(
+        std::make_unique<JFlipperSocketProvider>());
   }
 
  private:

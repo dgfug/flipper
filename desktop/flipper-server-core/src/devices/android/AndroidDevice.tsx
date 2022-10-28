@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,24 +7,32 @@
  * @format
  */
 
-import adb, {Client as ADBClient, PullTransfer} from 'adbkit';
-import {Priority, Reader} from 'adbkit-logcat';
+import adb, {util, Client as ADBClient, PullTransfer} from 'adbkit';
+import {Reader} from 'adbkit-logcat';
 import {createWriteStream} from 'fs';
-import type {DeviceLogLevel, DeviceType} from 'flipper-common';
-import which from 'which';
+import type {DeviceDebugData, DeviceType} from 'flipper-common';
 import {spawn} from 'child_process';
 import {dirname, join} from 'path';
-import {DeviceSpec} from 'flipper-plugin-lib';
+import {DeviceSpec} from 'flipper-common';
 import {ServerDevice} from '../ServerDevice';
 import {FlipperServerImpl} from '../../FlipperServerImpl';
+import {AndroidCrashWatcher} from './AndroidCrashUtils';
+import {AndroidLogListener} from './AndroidLogListener';
+import {DebuggableDevice} from '../DebuggableDevice';
+import {executeCommandAsApp, pull} from './androidContainerUtility';
 
 const DEVICE_RECORDING_DIR = '/sdcard/flipper_recorder';
 
-export default class AndroidDevice extends ServerDevice {
+export default class AndroidDevice
+  extends ServerDevice
+  implements DebuggableDevice
+{
   adb: ADBClient;
   pidAppMapping: {[key: number]: string} = {};
   private recordingProcess?: Promise<string>;
   reader?: Reader;
+  readonly logListener: AndroidLogListener;
+  readonly crashWatcher: AndroidCrashWatcher;
 
   constructor(
     flipperServer: FlipperServerImpl,
@@ -45,71 +53,36 @@ export default class AndroidDevice extends ServerDevice {
       specs,
       abiList,
       sdkVersion,
+      features: {
+        screenCaptureAvailable: false,
+        screenshotAvailable: false,
+      },
     });
     this.adb = adb;
-  }
 
-  startLogging() {
-    this.adb
-      .openLogcat(this.serial, {clear: true})
-      .then((reader) => {
-        this.reader = reader;
-        reader
-          .on('entry', (entry) => {
-            let type: DeviceLogLevel = 'unknown';
-            if (entry.priority === Priority.VERBOSE) {
-              type = 'verbose';
-            }
-            if (entry.priority === Priority.DEBUG) {
-              type = 'debug';
-            }
-            if (entry.priority === Priority.INFO) {
-              type = 'info';
-            }
-            if (entry.priority === Priority.WARN) {
-              type = 'warn';
-            }
-            if (entry.priority === Priority.ERROR) {
-              type = 'error';
-            }
-            if (entry.priority === Priority.FATAL) {
-              type = 'fatal';
-            }
-
-            this.addLogEntry({
-              tag: entry.tag,
-              pid: entry.pid,
-              tid: entry.tid,
-              message: entry.message,
-              date: entry.date,
-              type,
-            });
-          })
-          .on('end', () => {
-            if (this.reader) {
-              // logs didn't stop gracefully
-              setTimeout(() => {
-                if (this.connected) {
-                  console.warn(
-                    `Log stream broken: ${this.serial} - restarting`,
-                  );
-                  this.startLogging();
-                }
-              }, 100);
-            }
-          })
-          .on('error', (e) => {
-            console.warn('Failed to read from adb logcat: ', e);
-          });
-      })
-      .catch((e) => {
-        console.warn('Failed to open log stream: ', e);
-      });
-  }
-
-  stopLogging() {
-    this.reader?.end();
-    this.reader = undefined;
+    this.logListener = new AndroidLogListener(
+      () => this.connected,
+      (logEntry) => this.addLogEntry(logEntry),
+      this.adb,
+      this.serial,
+    );
+    // It is OK not to await the start of the log listener. We just spawn it and handle errors internally.
+    this.logListener
+      .start()
+      .catch((e) =>
+        console.error('AndroidDevice.logListener.start -> unexpected error', e),
+      );
+    this.crashWatcher = new AndroidCrashWatcher(this);
+    // It is OK not to await the start of the crash watcher. We just spawn it and handle errors internally.
+    // Crash watcher depends on functioning log listener. It waits for its start internally.
+    this.crashWatcher
+      .start()
+      .catch((e) =>
+        console.error(
+          'AndroidDevice.crashWatcher.start -> unexpected error',
+          e,
+        ),
+      );
   }
 
   reverse(ports: number[]): Promise<void> {
@@ -123,7 +96,9 @@ export default class AndroidDevice extends ServerDevice {
   }
 
   clearLogs(): Promise<void> {
-    return this.executeShellOrDie(['logcat', '-c']);
+    return this.executeShellOrDie(['logcat', '-c']).catch((e) => {
+      console.warn('Failed to clear logs:', e);
+    });
   }
 
   async navigateToLocation(location: string) {
@@ -150,7 +125,38 @@ export default class AndroidDevice extends ServerDevice {
     });
   }
 
-  async screenCaptureAvailable(): Promise<boolean> {
+  async setIntoPermissiveMode(): Promise<void> {
+    console.debug('AndroidDevice.setIntoPermissiveMode', this.serial);
+    try {
+      try {
+        await this.adb.root(this.serial);
+      } catch (e) {
+        if (
+          !(e instanceof Error) ||
+          e.message !== 'adbd is already running as root'
+        ) {
+          throw e;
+        }
+      }
+      console.debug(
+        'AndroidDevice.setIntoPermissiveMode -> enabled root',
+        this.serial,
+      );
+      await this.executeShellOrDie('setenforce 0');
+      console.info(
+        'AndroidDevice.setIntoPermissiveMode -> success',
+        this.serial,
+      );
+    } catch (e) {
+      console.info(
+        'AndroidDevice.setIntoPermissiveMode -> failed',
+        this.serial,
+        e,
+      );
+    }
+  }
+
+  async screenRecordAvailable(): Promise<boolean> {
     try {
       await this.executeShellOrDie(
         `[ ! -f /system/bin/screenrecord ] && echo "File does not exist"`,
@@ -249,8 +255,7 @@ export default class AndroidDevice extends ServerDevice {
           }),
       )
       .then((_) => destination);
-
-    return this.recordingProcess.then((_) => {});
+    // Intentionally not return a promise, this just kicks off the recording!
   }
 
   async stopScreenCapture(): Promise<string> {
@@ -274,36 +279,152 @@ export default class AndroidDevice extends ServerDevice {
     }
     super.disconnect();
   }
-}
 
-export async function launchEmulator(name: string, coldBoot: boolean = false) {
-  // On Linux, you must run the emulator from the directory it's in because
-  // reasons ...
-  return which('emulator')
-    .catch(() =>
-      join(
-        process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || '',
-        'emulator',
-        'emulator',
-      ),
-    )
-    .then((emulatorPath) => {
-      if (emulatorPath) {
-        const child = spawn(
-          emulatorPath,
-          [`@${name}`, ...(coldBoot ? ['-no-snapshot-load'] : [])],
-          {
-            detached: true,
-            cwd: dirname(emulatorPath),
+  async installApp(apkPath: string) {
+    console.log(`Installing app with adb ${apkPath}`);
+    await this.adb.install(this.serial, apkPath);
+  }
+
+  async readFlipperFolderForAllApps(): Promise<DeviceDebugData[]> {
+    console.debug(
+      'AndroidDevice.readFlipperFolderForAllApps',
+      this.info.serial,
+    );
+    const output = await this.adb
+      .shell(this.info.serial, 'pm list packages -3 -e')
+      .then(util.readAll)
+      .then((buffer) => buffer.toString());
+
+    const appIds = output
+      .split('\n')
+      // Each appId has \n at the end. The last appId also has it.
+      // As a result, there is an "" (empty string) item at the end after the split.
+      .filter((appId) => appId !== '')
+      // Cut off the "package:" prefix
+      .map((appIdRaw) => appIdRaw.substring('package:'.length));
+    console.debug(
+      'AndroidDevice.readFlipperFolderForAllApps -> found apps',
+      this.info.serial,
+      appIds,
+    );
+
+    const appsCommandsResults = await Promise.all(
+      appIds.map(async (appId): Promise<DeviceDebugData | undefined> => {
+        const sonarDirFileNames = await executeCommandAsApp(
+          this.adb,
+          this.info.serial,
+          appId,
+          `find /data/data/${appId}/files/sonar -type f -printf "%f\n"`,
+        )
+          .then((output) => {
+            if (output.includes('No such file or directory')) {
+              console.debug(
+                'AndroidDevice.readFlipperFolderForAllApps -> skipping app because sonar dir does not exist',
+                this.info.serial,
+                appId,
+              );
+              return;
+            }
+
+            return (
+              output
+                .split('\n')
+                // Each entry has \n at the end. The last one also has it.
+                // As a result, there is an "" (empty string) item at the end after the split.
+                .filter((appId) => appId !== '')
+            );
+          })
+          .catch((e) => {
+            console.debug(
+              'AndroidDevice.readFlipperFolderForAllApps -> failed to fetch sonar dir',
+              this.info.serial,
+              appId,
+              e,
+            );
+          });
+
+        if (!sonarDirFileNames) {
+          return;
+        }
+
+        const sonarDirContentPromises = sonarDirFileNames.map(
+          async (fileName) => {
+            const filePath = `/data/data/${appId}/files/sonar/${fileName}`;
+            if (fileName.endsWith('pem')) {
+              return {
+                path: filePath,
+                data: '===SECURE_CONTENT===',
+              };
+            }
+            return {
+              path: filePath,
+              data: await pull(
+                this.adb,
+                this.info.serial,
+                appId,
+                filePath,
+              ).catch((e) => `Couldn't pull the file: ${e}`),
+            };
           },
         );
-        child.stderr.on('data', (data) => {
-          console.warn(`Android emulator stderr: ${data}`);
-        });
-        child.on('error', (e) => console.warn('Android emulator error:', e));
-      } else {
-        throw new Error('Could not get emulator path');
-      }
-    })
-    .catch((e) => console.error('Android emulator startup failed:', e));
+
+        const sonarDirContentWithStatsCommandPromise = executeCommandAsApp(
+          this.adb,
+          this.info.serial,
+          appId,
+          `ls -al /data/data/${appId}/files/sonar`,
+        ).then((output): DeviceDebugData['data'][0] => ({
+          command: `ls -al /data/data/${appId}/files/sonar`,
+          result: output,
+        }));
+
+        const singleAppCommandResults = await Promise.all([
+          sonarDirContentWithStatsCommandPromise,
+          ...sonarDirContentPromises,
+        ]);
+
+        return {
+          serial: this.info.serial,
+          appId,
+          data: singleAppCommandResults,
+        };
+      }),
+    );
+
+    return (
+      appsCommandsResults
+        // Filter out apps without Flipper integration
+        .filter((res): res is DeviceDebugData => !!res)
+    );
+  }
+}
+
+export async function launchEmulator(
+  androidHome: string,
+  name: string,
+  coldBoot: boolean = false,
+) {
+  try {
+    // On Linux, you must run the emulator from the directory it's in because
+    // reasons ...
+    const emulatorPath = join(androidHome, 'emulator', 'emulator');
+    const child = spawn(
+      emulatorPath,
+      [`@${name}`, ...(coldBoot ? ['-no-snapshot-load'] : [])],
+      {
+        detached: true,
+        cwd: dirname(emulatorPath),
+        env: {
+          ...process.env,
+          ANDROID_SDK_ROOT: androidHome,
+        },
+      },
+    );
+    child.stderr.on('data', (data) => {
+      console.warn(`Android emulator stderr: ${data}`);
+    });
+    child.on('error', (e) => console.warn('Android emulator error:', e));
+  } catch (e) {
+    console.warn('Android emulator startup failed:', e);
+  }
 }

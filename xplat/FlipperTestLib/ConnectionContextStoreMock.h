@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,9 +19,6 @@ class ConnectionContextStoreMock : public ConnectionContextStore {
   }
   std::string createCertificateSigningRequest() {
     return "thisIsACsr";
-  }
-  std::shared_ptr<folly::SSLContext> getSSLContext() {
-    return nullptr;
   }
   folly::dynamic getConnectionConfig() {
     return nullptr;

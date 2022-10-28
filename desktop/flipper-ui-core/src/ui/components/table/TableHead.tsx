@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -22,7 +22,6 @@ import {theme, _Interactive, _InteractiveProps} from 'flipper-plugin';
 import styled from '@emotion/styled';
 import {colors} from '../colors';
 import FlexRow from '../FlexRow';
-import invariant from 'invariant';
 import React from 'react';
 
 const TableHeaderArrow = styled.span({
@@ -143,7 +142,9 @@ class TableHeadColumn extends PureComponent<{
     // normalise number to a percentage if we were originally passed a percentage
     if (isPercentage(width) && this.ref) {
       const {parentElement} = this.ref;
-      invariant(parentElement, 'expected there to be parentElement');
+      if (!parentElement) {
+        throw new Error('expected there to be parentElement');
+      }
 
       const parentWidth = parentElement.clientWidth;
       const {childNodes} = parentElement;
@@ -276,6 +277,10 @@ export default class TableHead extends PureComponent<{
 
       const key = column.key;
       const col = columns[key];
+      if (!col) {
+        console.warn('no column for key: ', key);
+        continue;
+      }
 
       let arrow;
       if (col.sortable === true && sortOrder && sortOrder.key === key) {

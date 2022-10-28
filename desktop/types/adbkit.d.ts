@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -57,6 +57,7 @@ declare module 'adbkit' {
       serial: string,
       command: string | string[],
     ) => Promise<NodeJS.ReadStream>;
+    root: (serial: string) => Promise<true>;
     screencap: (serial: string) => Promise<NodeJS.WriteStream>;
     pull: (serial: string, path: string) => Promise<PullTransfer>;
     openLogcat: (
@@ -74,6 +75,8 @@ declare module 'adbkit' {
       local: string,
       remote: string,
     ) => Promise<boolean>; // TODO: verify correctness of signature
+
+    install: (serial: string, apkPath: string) => Promise<boolean>;
   }
   export function createClient(config: {port: number; host: string}): Client;
 }

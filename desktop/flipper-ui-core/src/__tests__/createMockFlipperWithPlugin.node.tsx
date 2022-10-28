@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,14 +7,14 @@
  * @format
  */
 
-import {createMockFlipperWithPlugin} from '../test-utils/createMockFlipperWithPlugin';
+import {createMockFlipperWithPlugin} from './test-utils/createMockFlipperWithPlugin';
 import {FlipperPlugin} from '../plugin';
 import {TestIdler} from '../utils/Idler';
 import {getAllClients} from '../reducers/connections';
 
-interface PersistedState {
+type PersistedState = {
   count: 1;
-}
+};
 
 class TestPlugin extends FlipperPlugin<any, any, any> {
   static id = 'TestPlugin';

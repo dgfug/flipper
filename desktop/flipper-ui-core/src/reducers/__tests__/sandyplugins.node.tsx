@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,7 @@
  * @format
  */
 
-import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
+import {createMockFlipperWithPlugin} from '../../__tests__/test-utils/createMockFlipperWithPlugin';
 import Client from '../../Client';
 import {Store} from '../../reducers';
 import {registerPlugins} from '../../reducers/plugins';
@@ -18,6 +18,7 @@ import {
   TestUtils,
 } from 'flipper-plugin';
 import {switchPlugin} from '../pluginManager';
+import {awaitPluginCommandQueueEmpty} from '../../dispatcher/pluginManager';
 
 const pluginDetails = TestUtils.createMockPluginDetails();
 
@@ -183,6 +184,8 @@ test('it should not initialize a sandy plugin if not enabled', async () => {
       selectedApp: client.query.app,
     }),
   );
+
+  await awaitPluginCommandQueueEmpty(store);
 
   expect(client.sandyPluginStates.get(Plugin2.id)).toBeUndefined();
   expect(instance.connectStub).toHaveBeenCalledTimes(0);

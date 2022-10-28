@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,24 +10,23 @@
 import {Layout, theme} from 'flipper-plugin';
 import {LoadingIndicator, TableRows, ManagedTable, Glyph} from '../../ui';
 import React, {useCallback, useState, useEffect} from 'react';
-import {reportPlatformFailures, reportUsage} from 'flipper-common';
+import {
+  reportPlatformFailures,
+  reportUsage,
+  InstalledPluginDetails,
+  UpdateResult,
+  UpdatablePluginDetails,
+} from 'flipper-common';
 import reloadFlipper from '../../utils/reloadFlipper';
 import {registerInstalledPlugins} from '../../reducers/plugins';
-import {
-  UpdateResult,
-  getInstalledPlugins,
-  getUpdatablePlugins,
-  removePlugin,
-  UpdatablePluginDetails,
-  InstalledPluginDetails,
-} from 'flipper-plugin-lib';
-import {installPluginFromNpm} from 'flipper-plugin-lib';
 import {State as AppState} from '../../reducers';
 import {connect} from 'react-redux';
 import {Dispatch, Action} from 'redux';
 import PluginPackageInstaller from './PluginPackageInstaller';
 import {Toolbar} from 'flipper-plugin';
 import {Alert, Button, Input, Tooltip, Typography} from 'antd';
+import {getRenderHostInstance} from 'flipper-frontend-core';
+import {WarningOutlined} from '@ant-design/icons';
 
 const {Text, Link} = Typography;
 
@@ -51,7 +50,7 @@ const columns = {
     value: 'Description',
   },
   install: {
-    value: '',
+    value: 'Action',
   },
 };
 
@@ -258,7 +257,26 @@ function useNPMSearch(
       key: h.name,
       columns: {
         name: {
-          value: <Text ellipsis>{h.name.replace(/^flipper-plugin-/, '')}</Text>,
+          value: (
+            // Copy-paste from antd/Space. We cannot use Space directly as it wraps children with divs, and we cannot easily set styles fro the wrapper child divs.
+            // Yet, we want to set min-width: 0 for the child with the Text. Otherwise, ellipsis does not work.
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                overflow: 'hidden',
+                gap: theme.space.small,
+              }}>
+              {h.deprecated != null ? (
+                <Tooltip title={h.deprecated || 'Plugin is deprecated'}>
+                  <WarningOutlined style={{color: theme.errorColor}} />
+                </Tooltip>
+              ) : null}
+              <Text style={{minWidth: 0}} ellipsis>
+                {h.name.replace(/^flipper-plugin-/, '')}
+              </Text>
+            </div>
+          ),
         },
         version: {
           value: <Text ellipsis>{h.version}</Text>,
@@ -324,8 +342,33 @@ export default connect<PropsFromState, DispatchFromProps, OwnProps, AppState>(
   }),
   (dispatch: Dispatch<Action<any>>) => ({
     refreshInstalledPlugins: async () => {
-      const plugins = await getInstalledPlugins();
+      const plugins = await await getRenderHostInstance().flipperServer!.exec(
+        'plugins-get-installed-plugins',
+      );
       dispatch(registerInstalledPlugins(plugins));
     },
   }),
 )(PluginInstaller);
+
+async function installPluginFromNpm(
+  name: string,
+): Promise<InstalledPluginDetails> {
+  return await getRenderHostInstance().flipperServer!.exec(
+    'plugins-install-from-npm',
+    name,
+  );
+}
+
+async function removePlugin(name: string) {
+  return await getRenderHostInstance().flipperServer!.exec(
+    'plugins-remove-plugins',
+    [name],
+  );
+}
+
+async function getUpdatablePlugins(query: string | undefined) {
+  return await getRenderHostInstance().flipperServer!.exec(
+    'plugins-get-updatable-plugins',
+    query,
+  );
+}

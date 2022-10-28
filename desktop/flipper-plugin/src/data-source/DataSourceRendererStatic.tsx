@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,16 +7,17 @@
  * @format
  */
 
-import {DataSource} from './DataSource';
+// eslint-disable-next-line node/no-extraneous-import
+import type {_DataSourceView} from 'flipper-plugin-core';
 import React, {memo, useCallback, useEffect, useState} from 'react';
 
 import {RedrawContext} from './DataSourceRendererVirtual';
 
 type DataSourceProps<T extends object, C> = {
   /**
-   * The data source to render
+   * The data view to render
    */
-  dataSource: DataSource<T, T[keyof T]>;
+  dataView: _DataSourceView<T, T[keyof T]>;
   /**
    * additional context that will be passed verbatim to the itemRenderer, so that it can be easily memoized
    */
@@ -30,11 +31,12 @@ type DataSourceProps<T extends object, C> = {
   itemRenderer(item: T, index: number, context: C): React.ReactElement;
   useFixedRowHeight: boolean;
   defaultRowHeight: number;
+  maxRecords: number;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onUpdateAutoScroll?(autoScroll: boolean): void;
   emptyRenderer?:
     | null
-    | ((dataSource: DataSource<T, T[keyof T]>) => React.ReactElement);
+    | ((dataView: _DataSourceView<T, T[keyof T]>) => React.ReactElement);
 };
 
 /**
@@ -44,7 +46,8 @@ type DataSourceProps<T extends object, C> = {
 export const DataSourceRendererStatic: <T extends object, C>(
   props: DataSourceProps<T, C>,
 ) => React.ReactElement = memo(function DataSourceRendererStatic({
-  dataSource,
+  dataView,
+  maxRecords,
   useFixedRowHeight,
   context,
   itemRenderer,
@@ -65,8 +68,8 @@ export const DataSourceRendererStatic: <T extends object, C>(
     function subscribeToDataSource() {
       let unmounted = false;
 
-      dataSource.view.setWindow(0, dataSource.limit);
-      dataSource.view.setListener((_event) => {
+      dataView.setWindow(0, maxRecords);
+      const unsubscribe = dataView.addListener((_event) => {
         if (unmounted) {
           return;
         }
@@ -75,10 +78,10 @@ export const DataSourceRendererStatic: <T extends object, C>(
 
       return () => {
         unmounted = true;
-        dataSource.view.setListener(undefined);
+        unsubscribe();
       };
     },
-    [dataSource, setForceUpdate, useFixedRowHeight],
+    [dataView, maxRecords, setForceUpdate, useFixedRowHeight],
   );
 
   useEffect(() => {
@@ -89,7 +92,7 @@ export const DataSourceRendererStatic: <T extends object, C>(
   /**
    * Rendering
    */
-  const records = dataSource.view.output();
+  const records = dataView.output();
   if (records.length > 500) {
     console.warn(
       "StaticDataSourceRenderer should only be used on small datasets. For large datasets the 'scrollable' flag should enabled on DataTable",
@@ -100,7 +103,7 @@ export const DataSourceRendererStatic: <T extends object, C>(
     <RedrawContext.Provider value={redraw}>
       <div onKeyDown={onKeyDown} tabIndex={0}>
         {records.length === 0
-          ? emptyRenderer?.(dataSource)
+          ? emptyRenderer?.(dataView)
           : records.map((item, index) => (
               <div key={index}>{itemRenderer(item, index, context)}</div>
             ))}

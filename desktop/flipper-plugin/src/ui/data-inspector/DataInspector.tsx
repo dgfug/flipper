@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,7 @@
  */
 
 import {DataInspectorExpanded, RootDataContext} from './DataInspectorNode';
-import {PureComponent} from 'react';
+import {PureComponent, ReactElement} from 'react';
 import {DataInspectorNode} from './DataInspectorNode';
 import React from 'react';
 import {DataValueExtractor} from './DataPreview';
@@ -66,6 +66,20 @@ export type DataInspectorProps = {
    * Filter nodes by some search text
    */
   filter?: string;
+
+  /**
+   * Highlight color of the search text
+   */
+  highlightColor?: string;
+
+  /**
+   * these should be ant design Menu.Item's
+   */
+  additionalContextMenuItems?: (
+    parentPath: string[],
+    value: any,
+    name?: string,
+  ) => ReactElement[];
 };
 
 type DataInspectorState = {
@@ -73,6 +87,7 @@ type DataInspectorState = {
   filterExpanded: DataInspectorExpanded;
   userExpanded: DataInspectorExpanded;
   filter: string;
+  hoveredNodePath: string | undefined;
 };
 
 const MAX_RESULTS = 50;
@@ -93,6 +108,7 @@ export class DataInspector extends PureComponent<
     userExpanded: {},
     filterExpanded: {},
     filter: '',
+    hoveredNodePath: undefined,
   };
 
   static getDerivedStateFromProps(
@@ -172,6 +188,16 @@ export class DataInspector extends PureComponent<
     });
   };
 
+  setHoveredNodePath = (path?: string) => {
+    this.setState({
+      hoveredNodePath: path,
+    });
+  };
+
+  removeHover = () => {
+    this.setHoveredNodePath(undefined);
+  };
+
   // make sure this fn is a stable ref to not invalidate the whole tree on new data
   getRootData = () => {
     return this.props.data;
@@ -179,10 +205,14 @@ export class DataInspector extends PureComponent<
 
   render() {
     return (
-      <Layout.Container>
+      <Layout.Container onMouseLeave={this.removeHover}>
         <RootDataContext.Provider value={this.getRootData}>
-          <HighlightProvider text={this.props.filter}>
+          <HighlightProvider
+            text={this.props.filter}
+            highlightColor={this.props.highlightColor}>
             <DataInspectorNode
+              hoveredNodePath={this.state.hoveredNodePath}
+              setHoveredNodePath={this.setHoveredNodePath}
               data={this.props.data}
               diff={this.props.diff}
               extractValue={this.props.extractValue}
@@ -198,6 +228,7 @@ export class DataInspector extends PureComponent<
               parentPath={EMPTY_ARRAY}
               depth={0}
               parentAncestry={EMPTY_ARRAY}
+              additionalContextMenuItems={this.props.additionalContextMenuItems}
             />
           </HighlightProvider>
         </RootDataContext.Provider>

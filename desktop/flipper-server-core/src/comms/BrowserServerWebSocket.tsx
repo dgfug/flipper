@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,6 +18,8 @@ import SecureServerWebSocket, {
 } from './SecureServerWebSocket';
 import {SecureClientQuery} from './ServerAdapter';
 import {ClientDescription, DeviceOS} from 'flipper-common';
+import {URL} from 'url';
+import {isFBBuild} from '../fb-stubs/constants';
 
 interface BrowserConnectionCtx extends SecureConnectionCtx {
   clientConnection?: BrowserClientConnection;
@@ -79,7 +81,10 @@ class BrowserServerWebSocket extends SecureServerWebSocket {
     // Remove this part once our current customers migrate to the new message structure
     if (isLegacyMessage(parsedMessage)) {
       if (parsedMessage.type === 'connect') {
-        // TODO: Show a user warning about legacy message structure and protocol. Provide them with clear instructions on how to upgrade.
+        // TODO: Add a link to a blog post when it is ready.
+        console.warn(
+          '[conn] Legacy WebSocket connection. Please, upgrade. See https://github.com/facebook/flipper/tree/main/js/js-flipper for references.',
+        );
 
         // Legacy protocol supported passing an optional list of plugins with a 'connect' message.
         // Clients that pass the list of plugins this way might not suport `getPlugins` call.
@@ -94,6 +99,11 @@ class BrowserServerWebSocket extends SecureServerWebSocket {
           // Upon initialization it sent a `getPlugins` request.
           // We find that request and resolve it with the list of plugins we received from the `connect` message
           const getPluginsCallbacks = clientConnection.matchPendingRequest(0);
+
+          if (!getPluginsCallbacks) {
+            return;
+          }
+
           getPluginsCallbacks.resolve({
             success: {plugins},
             length: rawMessage.length,
@@ -139,6 +149,15 @@ class BrowserServerWebSocket extends SecureServerWebSocket {
 
   protected verifyClient(): ws.VerifyClientCallbackSync {
     return (info: {origin: string; req: IncomingMessage; secure: boolean}) => {
+      if (isFBBuild) {
+        try {
+          const urlObj = new URL(info.origin);
+          if (urlObj.hostname.endsWith('.facebook.com')) {
+            return true;
+          }
+        } catch {}
+      }
+
       const ok = getFlipperServerConfig().validWebSocketOrigins.some(
         (validPrefix) => info.origin.startsWith(validPrefix),
       );

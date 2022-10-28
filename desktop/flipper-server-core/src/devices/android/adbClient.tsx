@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,29 +13,51 @@ import adbConfig from './adbConfig';
 import adbkit, {Client} from 'adbkit';
 import path from 'path';
 
-let instance: Promise<Client>;
-
 type Config = {
   androidHome: string;
+  adbKitSettings?: {
+    host?: string;
+    port?: number;
+  };
 };
 
-export function getAdbClient(config: Config): Promise<Client> {
-  if (!instance) {
-    instance = reportPlatformFailures(createClient(config), 'createADBClient');
-  }
-  return instance;
+export async function initializeAdbClient(
+  config: Config,
+): Promise<Client | void> {
+  const adbClient = await reportPlatformFailures(
+    createClient(config),
+    'createADBClient',
+  ).catch((e) => {
+    console.warn(
+      'Failed to initialize ADB. Please disable Android support in settings, or configure a correct path.',
+      e,
+    );
+  });
+  return adbClient;
 }
 
 /* Adbkit will attempt to start the adb server if it's not already running,
    however, it sometimes fails with ENOENT errors. So instead, we start it
    manually before requesting a client. */
 async function createClient(config: Config): Promise<Client> {
-  const androidHome = config.androidHome;
-  const adbPath = path.resolve(androidHome, 'platform-tools', 'adb');
   return reportPlatformFailures<Client>(
-    execFile(adbPath, ['start-server']).then(() =>
-      adbkit.createClient(adbConfig()),
+    startAdbServer(config.androidHome).then(() =>
+      adbkit.createClient(adbConfig(config.adbKitSettings)),
     ),
     'createADBClient.shell',
   );
+}
+
+async function startAdbServer(androidHome: string) {
+  const adbPath = path.resolve(androidHome, 'platform-tools', 'adb');
+  const args = ['start-server'];
+
+  return execFile(adbPath, args).catch((error) => {
+    if (error.code == 'ENOENT') {
+      console.info('falling back to the alternative adb path');
+      return execFile(path.resolve(androidHome, 'adb'), args);
+    }
+
+    throw error;
+  });
 }

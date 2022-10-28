@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import javax.annotation.Nullable;
 
 /**
@@ -119,6 +120,17 @@ public class AccessibilityRoleUtil {
     }
 
     if (role.equals(AccessibilityRole.NONE)) {
+      if (AccessibilityUtil.supportsAction(
+              nodeInfo, AccessibilityActionCompat.ACTION_PAGE_UP.getId())
+          || AccessibilityUtil.supportsAction(
+              nodeInfo, AccessibilityActionCompat.ACTION_PAGE_DOWN.getId())
+          || AccessibilityUtil.supportsAction(
+              nodeInfo, AccessibilityActionCompat.ACTION_PAGE_LEFT.getId())
+          || AccessibilityUtil.supportsAction(
+              nodeInfo, AccessibilityActionCompat.ACTION_PAGE_RIGHT.getId())) {
+        return AccessibilityRole.PAGER;
+      }
+
       AccessibilityNodeInfoCompat.CollectionInfoCompat collection = nodeInfo.getCollectionInfo();
       if (collection != null) {
         // RecyclerView will be classified as a list or grid.

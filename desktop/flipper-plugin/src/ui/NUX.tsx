@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,21 +7,30 @@
  * @format
  */
 
-import React, {createContext, useCallback, useContext} from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import {Badge, Tooltip, Typography, Button} from 'antd';
 import styled from '@emotion/styled';
 import {keyframes} from '@emotion/css';
 import reactElementToJSXString from 'react-element-to-jsx-string';
 import {SandyPluginContext} from '../plugin/PluginContext';
-import {createState, useValue} from '../state/atom';
-import {SandyDevicePluginInstance} from '../plugin/DevicePlugin';
+import {createState} from 'flipper-plugin-core';
+import {useValue} from '../state/atom';
+import {_SandyDevicePluginInstance} from 'flipper-plugin-core';
 import {Layout} from './Layout';
 import {BulbTwoTone} from '@ant-design/icons';
-import {createHash} from 'crypto';
+// This import is OK since it is a type-only import
+// eslint-disable-next-line no-restricted-imports
 import type {TooltipPlacement} from 'antd/lib/tooltip';
-import {SandyPluginInstance} from '../plugin/Plugin';
+import {_SandyPluginInstance} from 'flipper-plugin-core';
 import {theme} from './theme';
 import {Tracked} from './Tracked';
+import {sha256} from '../utils/sha256';
 
 const {Text} = Typography;
 
@@ -29,13 +38,12 @@ type NuxManager = ReturnType<typeof createNuxManager>;
 
 const storageKey = `FLIPPER_NUX_STATE`;
 
-export function getNuxKey(
+export async function getNuxKey(
   elem: React.ReactNode,
-  currentPlugin?: SandyPluginInstance | SandyDevicePluginInstance,
-) {
-  return `${currentPlugin?.definition.id ?? 'flipper'}:${createHash('sha256')
-    .update(reactElementToJSXString(elem))
-    .digest('base64')}`;
+  currentPlugin?: _SandyPluginInstance | _SandyDevicePluginInstance,
+): Promise<string> {
+  const hash = await sha256(reactElementToJSXString(elem));
+  return `${currentPlugin?.definition.id ?? 'flipper'}:${hash}`;
 }
 
 export function createNuxManager() {
@@ -52,18 +60,18 @@ export function createNuxManager() {
   }
 
   return {
-    markRead(
+    async markRead(
       elem: React.ReactNode,
-      currentPlugin?: SandyPluginInstance | SandyDevicePluginInstance,
-    ): void {
-      readMap[getNuxKey(elem, currentPlugin)] = true;
+      currentPlugin?: _SandyPluginInstance | _SandyDevicePluginInstance,
+    ): Promise<void> {
+      readMap[await getNuxKey(elem, currentPlugin)] = true;
       save();
     },
-    isRead(
+    async isRead(
       elem: React.ReactNode,
-      currentPlugin?: SandyPluginInstance | SandyDevicePluginInstance,
-    ): boolean {
-      return !!readMap[getNuxKey(elem, currentPlugin)];
+      currentPlugin?: _SandyPluginInstance | _SandyDevicePluginInstance,
+    ): Promise<boolean> {
+      return !!readMap[await getNuxKey(elem, currentPlugin)];
     },
     resetHints(): void {
       readMap = {};
@@ -74,8 +82,8 @@ export function createNuxManager() {
 }
 
 const stubManager: NuxManager = {
-  markRead() {},
-  isRead() {
+  async markRead() {},
+  async isRead() {
     return true;
   },
   resetHints() {},
@@ -100,7 +108,18 @@ export function NUX({
   const pluginInstance = useContext(SandyPluginContext);
   // changing the ticker will force `isRead` to be recomputed
   const _tick = useValue(manager.ticker);
-  const isRead = manager.isRead(title, pluginInstance);
+  // start with Read = true until proven otherwise, to avoid Nux glitches
+  const [isRead, setIsRead] = useState(true);
+
+  useEffect(() => {
+    manager
+      .isRead(title, pluginInstance)
+      .then(setIsRead)
+      .catch((e) => {
+        console.warn('Failed to read NUX status', e);
+      });
+  }, [manager, title, pluginInstance, _tick]);
+
   const dismiss = useCallback(() => {
     manager.markRead(title, pluginInstance);
   }, [title, manager, pluginInstance]);
@@ -146,19 +165,10 @@ const UnanimatedBadge = styled(Badge)(({count}) => ({
   },
 }));
 
-const pulse = keyframes({
-  '0%': {
-    opacity: 0.2,
-  },
-  '100%': {
-    opacity: 1,
-  },
-});
-
 const Pulse = styled.div({
   cursor: 'pointer',
   background: theme.warningColor,
-  animation: `${pulse} 2s infinite alternate`,
+  opacity: 0.6,
   borderRadius: 20,
   height: 12,
   width: 12,

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,18 +7,19 @@
  * @format
  */
 
-import {Layout} from './Layout';
 import {Component, ReactNode} from 'react';
 import styled from '@emotion/styled';
 import {Property} from 'csstype';
+import {Container} from './Container';
 import React from 'react';
 import {MoreOutlined} from '@ant-design/icons';
 import {Interactive, InteractiveProps} from './Interactive';
 import {theme} from './theme';
+import {Layout} from './Layout';
 
 const SidebarInteractiveContainer = styled(Interactive)<InteractiveProps>({
   display: 'flex',
-  flex: 1,
+  flex: '0 1 1',
 });
 SidebarInteractiveContainer.displayName = 'Sidebar:SidebarInteractiveContainer';
 
@@ -26,7 +27,7 @@ type SidebarPosition = 'left' | 'top' | 'right' | 'bottom';
 
 const borderStyle = `1px solid ${theme.dividerColor}`;
 
-const SidebarContainer = styled(Layout.Container)<{
+const SidebarContainer = styled(Container)<{
   position: 'right' | 'top' | 'left' | 'bottom';
   overflow?: boolean;
   unstyled?: boolean;
@@ -197,9 +198,16 @@ export class Sidebar extends Component<SidebarProps, SidebarState> {
         gutterWidth={gutter ? theme.space.large : undefined}>
         <SidebarContainer position={position} unstyled={gutter}>
           {gutter ? (
-            <GutterWrapper position={position}>{children}</GutterWrapper>
+            <GutterWrapper position={position}>
+              {/* Stop propagating mousedown events to prevent SidebarInteractiveContainer from resizing whenever a user starts selecting text in a child */}
+              <Layout.Container grow onMouseDown={(e) => e.stopPropagation()}>
+                {children}
+              </Layout.Container>
+            </GutterWrapper>
           ) : (
-            children
+            <Layout.Container grow onMouseDown={(e) => e.stopPropagation()}>
+              {children}
+            </Layout.Container>
           )}
         </SidebarContainer>
       </SidebarInteractiveContainer>

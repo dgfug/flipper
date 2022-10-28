@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -92,32 +92,15 @@ describe('ServerWebSocket', () => {
     expect(mockSEListener.onError).toBeCalledTimes(0);
 
     const conflictingServer = new ServerWebSocket(mockSEListener);
-    await expect(conflictingServer.start(assignedPort)).rejects.toThrow();
+    await expect(conflictingServer.start(assignedPort)).rejects.toThrow(
+      /EADDRINUSE/,
+    );
 
     expect(mockSEListener.onListening).toBeCalledTimes(1);
-    expect(mockSEListener.onError).toBeCalledTimes(1);
+    expect(mockSEListener.onError).toBeCalledTimes(0); // no onError triggered, as start throws already
   });
 
-  test('calls listener onError if a connection attempt fails', async () => {
-    const mockSEListener = createMockSEListener();
-
-    server = new ServerWebSocket(mockSEListener);
-
-    const port = await server.start(0);
-
-    expect(mockSEListener.onError).toBeCalledTimes(0);
-    // We pass a conection URL without required params hoping that it is going to fail
-    wsClient = new WebSocket(`ws://localhost:${port}`);
-    await new Promise<void>((resolve) => {
-      wsClient!.onclose = () => {
-        resolve();
-      };
-    });
-    wsClient = undefined;
-    expect(mockSEListener.onError).toBeCalledTimes(1);
-  });
-
-  test('calls listener onError if a message handling fails', async () => {
+  test('does NOT call listener onError if individual message handling fails', async () => {
     const mockSEListener = createMockSEListener();
 
     server = new ServerWebSocket(mockSEListener);
@@ -134,9 +117,8 @@ describe('ServerWebSocket', () => {
     // Sending invalid JSON to cause a parsing error
     wsClient.send(`{{{{`);
     // Server must close the connection on error
-    await new Promise((resolve) => {
-      wsClient!.onclose = resolve;
-    });
-    expect(mockSEListener.onError).toBeCalledTimes(1);
+
+    expect(mockSEListener.onError).toBeCalledTimes(0);
+    expect(mockSEListener.onListening).toBeCalledTimes(1);
   });
 });

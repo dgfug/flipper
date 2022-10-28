@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,27 +8,36 @@
  */
 
 import {CopyOutlined, FilterOutlined, TableOutlined} from '@ant-design/icons';
-import {Checkbox, Menu} from 'antd';
+import {Badge, Checkbox, Menu, Select, Switch} from 'antd';
+import {Layout} from 'flipper-plugin';
 import {
   DataTableDispatch,
   getSelectedItem,
   getSelectedItems,
+  getValueAtPath,
+  SearchHighlightSetting,
   Selection,
 } from './DataTableManager';
 import React from 'react';
-import {tryGetFlipperLibImplementation} from '../../plugin/FlipperLib';
+import {
+  _tryGetFlipperLibImplementation,
+  _DataSourceView,
+} from 'flipper-plugin-core';
 import {DataTableColumn} from './DataTable';
 import {toFirstUpper} from '../../utils/toFirstUpper';
-import {DataSource} from '../../data-source/index';
 import {renderColumnValue} from './TableRow';
 import {textContent} from '../../utils/textContent';
+import {theme} from '../theme';
 
 const {Item, SubMenu} = Menu;
+const {Option} = Select;
 
 export function tableContextMenuFactory<T>(
-  datasource: DataSource<T, T[keyof T]>,
+  dataView: _DataSourceView<T, T[keyof T]>,
   dispatch: DataTableDispatch<T>,
   selection: Selection,
+  highlightSearchSetting: SearchHighlightSetting,
+  filterSearchHistory: boolean,
   columns: DataTableColumn<T>[],
   visibleColumns: DataTableColumn<T>[],
   onCopyRows: (
@@ -36,8 +45,9 @@ export function tableContextMenuFactory<T>(
     visibleColumns: DataTableColumn<T>[],
   ) => string = defaultOnCopyRows,
   onContextMenu?: (selection: undefined | T) => React.ReactElement,
+  sideBySideOption?: React.ReactElement,
 ) {
-  const lib = tryGetFlipperLibImplementation();
+  const lib = _tryGetFlipperLibImplementation();
   if (!lib) {
     return (
       <Menu>
@@ -49,7 +59,7 @@ export function tableContextMenuFactory<T>(
   return (
     <Menu>
       {onContextMenu
-        ? onContextMenu(getSelectedItem(datasource, selection))
+        ? onContextMenu(getSelectedItem(dataView, selection))
         : null}
       <SubMenu
         key="filter same"
@@ -78,7 +88,7 @@ export function tableContextMenuFactory<T>(
           key="copyToClipboard"
           disabled={!hasSelection}
           onClick={() => {
-            const items = getSelectedItems(datasource, selection);
+            const items = getSelectedItems(dataView, selection);
             if (items.length) {
               lib.writeTextToClipboard(onCopyRows(items, visibleColumns));
             }
@@ -90,7 +100,7 @@ export function tableContextMenuFactory<T>(
             key="createPaste"
             disabled={!hasSelection}
             onClick={() => {
-              const items = getSelectedItems(datasource, selection);
+              const items = getSelectedItems(dataView, selection);
               if (items.length) {
                 lib.createPaste(onCopyRows(items, visibleColumns));
               }
@@ -102,7 +112,7 @@ export function tableContextMenuFactory<T>(
           key="copyToClipboardJSON"
           disabled={!hasSelection}
           onClick={() => {
-            const items = getSelectedItems(datasource, selection);
+            const items = getSelectedItems(dataView, selection);
             if (items.length) {
               lib.writeTextToClipboard(rowsToJson(items));
             }
@@ -111,10 +121,10 @@ export function tableContextMenuFactory<T>(
         </Item>
         {lib.isFB && (
           <Item
-            key="createPaste"
+            key="createPasteJSON"
             disabled={!hasSelection}
             onClick={() => {
-              const items = getSelectedItems(datasource, selection);
+              const items = getSelectedItems(dataView, selection);
               if (items.length) {
                 lib.createPaste(rowsToJson(items));
               }
@@ -131,12 +141,14 @@ export function tableContextMenuFactory<T>(
         disabled={!hasSelection}>
         {visibleColumns.map((column, idx) => (
           <Item
-            key={column.key ?? idx}
+            key={'copy cell' + (column.key ?? idx)}
             onClick={() => {
-              const items = getSelectedItems(datasource, selection);
+              const items = getSelectedItems(dataView, selection);
               if (items.length) {
                 lib.writeTextToClipboard(
-                  items.map((item) => '' + item[column.key]).join('\n'),
+                  items
+                    .map((item) => '' + getValueAtPath(item, column.key))
+                    .join('\n'),
                 );
               }
             }}>
@@ -147,7 +159,7 @@ export function tableContextMenuFactory<T>(
       <Menu.Divider />
       <SubMenu title="Visible columns" key="visible columns">
         {columns.map((column, idx) => (
-          <Menu.Item key={column.key ?? idx}>
+          <Menu.Item key={'visible column ' + (column.key ?? idx)}>
             <Checkbox
               checked={column.visible}
               onClick={(e) => {
@@ -161,12 +173,106 @@ export function tableContextMenuFactory<T>(
         ))}
       </SubMenu>
       <Menu.Item
+        key="resetFilters"
+        onClick={() => {
+          dispatch({type: 'resetFilters'});
+        }}>
+        Reset filters
+      </Menu.Item>
+      <Menu.Item
         key="reset"
         onClick={() => {
           dispatch({type: 'reset'});
         }}>
         Reset view
       </Menu.Item>
+
+      <SubMenu title="Search Options" key="search options">
+        <Menu.Item
+          key="clear history"
+          onClick={() => {
+            dispatch({type: 'clearSearchHistory'});
+          }}>
+          Clear search history
+        </Menu.Item>
+        <Menu.Item key="highlight search setting">
+          <Layout.Horizontal
+            gap
+            center
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}>
+            Highlight search terms
+            <Switch
+              checked={highlightSearchSetting.highlightEnabled}
+              size="small"
+              onChange={() => {
+                dispatch({
+                  type: 'toggleHighlightSearch',
+                });
+              }}
+            />
+          </Layout.Horizontal>
+        </Menu.Item>
+        <Menu.Item key="highlight search color">
+          <Layout.Horizontal
+            gap
+            center
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}>
+            Highlight search color
+            <Select
+              style={{width: '7em'}}
+              defaultValue={highlightSearchSetting.color}
+              onChange={(color: string) => {
+                dispatch({
+                  type: 'setSearchHighlightColor',
+                  color: color,
+                });
+              }}>
+              {Object.entries(theme.searchHighlightBackground).map(
+                ([colorName, color]) => (
+                  <Option key={colorName} value={color}>
+                    <Badge
+                      text={
+                        <span style={{backgroundColor: color}}>
+                          {colorName.charAt(0).toUpperCase() +
+                            colorName.slice(1)}
+                        </span>
+                      }
+                      color={color}
+                    />
+                  </Option>
+                ),
+              )}
+            </Select>
+          </Layout.Horizontal>
+        </Menu.Item>
+        <Menu.Item key="toggle search auto complete">
+          <Layout.Horizontal
+            gap
+            center
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}>
+            Filter Search History
+            <Switch
+              checked={filterSearchHistory}
+              size="small"
+              onChange={() => {
+                dispatch({
+                  type: 'toggleFilterSearchHistory',
+                });
+              }}
+            />
+          </Layout.Horizontal>
+        </Menu.Item>
+      </SubMenu>
+      {sideBySideOption}
     </Menu>
   );
 }

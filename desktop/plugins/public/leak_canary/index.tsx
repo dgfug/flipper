@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -130,7 +130,9 @@ export default class LeakCanary<PersistedState> extends FlipperPlugin<
       selectedIdx: null,
       selectedEid: null,
     });
-    this.client.call('clear');
+    this.client.call('clear').catch((e) => {
+      console.warn('[LeakCanary] clear failed with error', e);
+    });
   };
 
   _selectElement = (leakIdx: number, eid: string) => {
@@ -232,10 +234,10 @@ export default class LeakCanary<PersistedState> extends FlipperPlugin<
               return (
                 <Panel
                   key={idx}
-                  collapsable={false}
+                  collapsable
                   padded={false}
                   heading={leak.title}
-                  floating={false}
+                  floating
                   accessory={leak.retainedSize}>
                   <ElementsInspector
                     onElementSelected={(eid) => {
@@ -249,6 +251,7 @@ export default class LeakCanary<PersistedState> extends FlipperPlugin<
                     searchResults={null}
                     root={leak.root}
                     elements={elements}
+                    scrollable={false}
                   />
                 </Panel>
               );

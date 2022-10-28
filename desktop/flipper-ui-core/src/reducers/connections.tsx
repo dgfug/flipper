@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,15 +10,9 @@
 import {ComponentType} from 'react';
 import {produce} from 'immer';
 
-import type BaseDevice from '../devices/BaseDevice';
+import type {BaseDevice} from 'flipper-frontend-core';
 import type Client from '../Client';
-import type {
-  UninitializedClient,
-  DeviceOS,
-  Logger,
-  FlipperServer,
-} from 'flipper-common';
-import {performance} from 'perf_hooks';
+import type {UninitializedClient, DeviceOS, Logger} from 'flipper-common';
 import type {Actions} from '.';
 import {WelcomeScreenStaticView} from '../sandy-chrome/WelcomeScreen';
 import {isDevicePluginDefinition} from '../utils/pluginUtils';
@@ -80,7 +74,6 @@ type StateV2 = {
   deepLinkPayload: unknown;
   staticView: StaticView;
   selectedAppPluginListRevision: number;
-  flipperServer: FlipperServer | undefined;
 };
 
 type StateV1 = Omit<StateV2, 'enabledPlugins' | 'enabledDevicePlugins'> & {
@@ -166,10 +159,6 @@ export type Action =
   | {
       type: 'APP_PLUGIN_LIST_CHANGED';
     }
-  | {
-      type: 'SET_FLIPPER_SERVER';
-      payload: FlipperServer;
-    }
   | RegisterPluginAction;
 
 const DEFAULT_PLUGIN = 'DeviceLogs';
@@ -196,31 +185,16 @@ const INITAL_STATE: State = {
   deepLinkPayload: null,
   staticView: WelcomeScreenStaticView,
   selectedAppPluginListRevision: 0,
-  flipperServer: undefined,
 };
 
 export default (state: State = INITAL_STATE, action: Actions): State => {
   switch (action.type) {
-    case 'SET_FLIPPER_SERVER': {
-      return {
-        ...state,
-        flipperServer: action.payload,
-      };
-    }
-
     case 'SET_STATIC_VIEW': {
       const {payload, deepLinkPayload} = action;
       return {
         ...state,
         staticView: payload,
         deepLinkPayload: deepLinkPayload ?? null,
-      };
-    }
-
-    case 'RESET_SUPPORT_FORM_V2_STATE': {
-      return {
-        ...state,
-        staticView: null,
       };
     }
 
@@ -325,7 +299,7 @@ export default (state: State = INITAL_STATE, action: Actions): State => {
 
       return produce(state, (draft) => {
         if (draft.clients.has(payload.id)) {
-          console.error(
+          console.warn(
             `Received a new connection for client ${payload.id}, but the old connection was not cleaned up`,
           );
         }
@@ -492,7 +466,7 @@ export const selectPlugin = (payload: {
 
 export const setMenuEntries = (menuEntries: NormalizedMenuEntry[]): Action => ({
   type: 'SET_MENU_ENTRIES',
-  payload: menuEntries,
+  payload: menuEntries.slice(),
 });
 
 export const selectClient = (clientId: string): Action => ({

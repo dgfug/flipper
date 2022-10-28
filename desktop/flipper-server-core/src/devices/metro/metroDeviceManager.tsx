@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@ import MetroDevice from './MetroDevice';
 import http from 'http';
 import {parseEnvironmentVariableAsNumber} from '../../utils/environmentVariables';
 import {FlipperServerImpl} from '../../FlipperServerImpl';
+import WebSocket from 'ws';
 
 const METRO_HOST = 'localhost';
 const METRO_PORT = parseEnvironmentVariableAsNumber('METRO_SERVER_PORT', 8081);
@@ -64,7 +65,11 @@ export default (flipperServer: FlipperServerImpl) => {
 
     if (await isMetroRunning()) {
       try {
-        const _ws = new WebSocket(METRO_LOGS_ENDPOINT);
+        const _ws = new WebSocket(METRO_LOGS_ENDPOINT, {
+          // temporarily hardcoded URL, as without an origin header, metro will crash, see
+          // https://github.com/facebook/flipper/issues/3189
+          origin: 'http://localhost:3000/flipper',
+        });
 
         _ws.onopen = () => {
           clearTimeout(guard);

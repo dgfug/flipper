@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,7 +29,11 @@ function processMessagesImmediately(
   const reducerStartTime = Date.now();
   try {
     plugin.receiveMessages(messages);
-    addBackgroundStat(plugin.definition.id, Date.now() - reducerStartTime);
+    addBackgroundStat(
+      plugin.definition.id,
+      messages,
+      Date.now() - reducerStartTime,
+    );
   } catch (e) {
     console.error(
       `Failed to process event for plugin ${plugin.definition.id}`,

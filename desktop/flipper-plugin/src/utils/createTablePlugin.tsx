@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,14 +8,14 @@
  */
 
 import {notification, Typography} from 'antd';
-import {DataSource} from '../data-source/index';
+import {DataSource} from 'flipper-plugin-core';
 import React from 'react';
-import {PluginClient} from '../plugin/Plugin';
+import {PluginClient} from 'flipper-plugin-core';
 import {usePlugin} from '../plugin/PluginContext';
-import {createState} from '../state/atom';
+import {createState} from 'flipper-plugin-core';
 import {DataTableColumn} from '../ui/data-table/DataTable';
 import {MasterDetail} from '../ui/MasterDetail';
-import {createDataSource} from '../state/createDataSource';
+import {createDataSource} from 'flipper-plugin-core';
 
 type PluginResult<Raw, Row> = {
   plugin(client: PluginClient<Record<string, Raw | {}>>): {

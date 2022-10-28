@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,13 +17,7 @@ import {
   QuestionCircleFilled,
   LoadingOutlined,
 } from '@ant-design/icons';
-import {Layout} from '../ui';
-import {
-  HealthcheckReport,
-  HealthcheckReportItem,
-  HealthcheckStatus,
-  HealthcheckResult,
-} from '../reducers/healthchecks';
+import {Layout, styled} from '../ui';
 import {theme} from 'flipper-plugin';
 import {
   startHealthchecks,
@@ -33,13 +27,14 @@ import {
   resetAcknowledgedProblems,
 } from '../reducers/healthchecks';
 import runHealthchecks from '../utils/runHealthchecks';
-import {Healthchecks} from 'flipper-doctor';
+import type {FlipperDoctor} from 'flipper-common';
+type Healthchecks = FlipperDoctor.Healthchecks;
 import {reportUsage} from 'flipper-common';
 
 const {Title, Paragraph, Text} = Typography;
 
 const statusTypeAndMessage: {
-  [key in HealthcheckStatus]: {
+  [key in FlipperDoctor.HealthcheckStatus]: {
     type: 'success' | 'info' | 'warning' | 'error';
     message: string;
   };
@@ -67,15 +62,15 @@ const statusTypeAndMessage: {
   },
 };
 
-function checkHasProblem(result: HealthcheckResult) {
+function checkHasProblem(result: FlipperDoctor.HealthcheckResult) {
   return result.status === 'FAILED' || result.status === 'WARNING';
 }
 
-export function checkHasNewProblem(result: HealthcheckResult) {
+export function checkHasNewProblem(result: FlipperDoctor.HealthcheckResult) {
   return checkHasProblem(result) && !result.isAcknowledged;
 }
 
-function ResultTopDialog(props: {status: HealthcheckStatus}) {
+function ResultTopDialog(props: {status: FlipperDoctor.HealthcheckStatus}) {
   const messages = statusTypeAndMessage[props.status];
   return (
     <Alert
@@ -92,7 +87,7 @@ function ResultTopDialog(props: {status: HealthcheckStatus}) {
   );
 }
 
-function CheckIcon(props: {status: HealthcheckStatus}) {
+function CheckIcon(props: {status: FlipperDoctor.HealthcheckStatus}) {
   switch (props.status) {
     case 'SUCCESS':
       return (
@@ -119,7 +114,9 @@ function CheckIcon(props: {status: HealthcheckStatus}) {
   }
 }
 
-function CollapsableCategory(props: {checks: Array<HealthcheckReportItem>}) {
+function CollapsableCategory(props: {
+  checks: Array<FlipperDoctor.HealthcheckReportItem>;
+}) {
   return (
     <Collapse ghost>
       {props.checks.map((check) => (
@@ -134,7 +131,7 @@ function CollapsableCategory(props: {checks: Array<HealthcheckReportItem>}) {
   );
 }
 
-function HealthCheckList(props: {report: HealthcheckReport}) {
+function HealthCheckList(props: {report: FlipperDoctor.HealthcheckReport}) {
   useEffect(() => reportUsage('doctor:report:opened'), []);
   return (
     <Layout.Container gap>
@@ -164,6 +161,11 @@ function HealthCheckList(props: {report: HealthcheckReport}) {
   );
 }
 
+const FooterContainer = styled(Layout.Horizontal)({
+  justifyContent: 'space-between',
+  alignItems: 'center',
+});
+
 function SetupDoctorFooter(props: {
   onClose: () => void;
   onRerunDoctor: () => Promise<void>;
@@ -175,14 +177,15 @@ function SetupDoctorFooter(props: {
   return (
     <Layout.Right>
       {props.showAcknowledgeCheckbox ? (
-        <Checkbox
-          checked={props.acknowledgeCheck}
-          onChange={(e) => props.onAcknowledgeCheck(e.target.checked)}
-          style={{display: 'flex', alignItems: 'center'}}>
-          <Text style={{fontSize: theme.fontSize.small}}>
-            Do not show warning about these problems at startup
-          </Text>
-        </Checkbox>
+        <FooterContainer>
+          <Checkbox
+            checked={props.acknowledgeCheck}
+            onChange={(e) => props.onAcknowledgeCheck(e.target.checked)}>
+            <Text style={{fontSize: theme.fontSize.small}}>
+              Do not show warning about these problems at startup
+            </Text>
+          </Checkbox>
+        </FooterContainer>
       ) : (
         <Layout.Container />
       )}
@@ -241,7 +244,7 @@ export default function SetupDoctorScreen(props: {
       updateHealthcheckResult: (
         categoryKey: string,
         itemKey: string,
-        result: HealthcheckResult,
+        result: FlipperDoctor.HealthcheckResult,
       ) => dispatch(updateHealthcheckResult(categoryKey, itemKey, result)),
       finishHealthchecks: () => dispatch(finishHealthchecks()),
     });
@@ -254,6 +257,7 @@ export default function SetupDoctorScreen(props: {
 
   return (
     <Modal
+      centered
       width={570}
       title="Setup Doctor"
       visible={props.visible}

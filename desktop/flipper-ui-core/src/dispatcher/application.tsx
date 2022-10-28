@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,26 +16,26 @@ import {
 import {tryCatchReportPlatformFailures} from 'flipper-common';
 import {handleDeeplink} from '../deeplink';
 import {Dialog} from 'flipper-plugin';
-import {getRenderHostInstance} from '../RenderHost';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 export default (store: Store, logger: Logger) => {
   const renderHost = getRenderHostInstance();
 
   const onFocus = () => {
-    setImmediate(() => {
+    setTimeout(() => {
       store.dispatch({
         type: 'windowIsFocused',
         payload: {isFocused: true, time: Date.now()},
       });
-    });
+    }, 1);
   };
   const onBlur = () => {
-    setImmediate(() => {
+    setTimeout(() => {
       store.dispatch({
         type: 'windowIsFocused',
         payload: {isFocused: false, time: Date.now()},
       });
-    });
+    }, 1);
   };
   window.addEventListener('focus', onFocus);
   window.addEventListener('blur', onBlur);

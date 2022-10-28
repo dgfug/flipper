@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,7 +14,10 @@ import styled from '@emotion/styled';
 import React, {MouseEvent, KeyboardEvent} from 'react';
 import {theme} from '../theme';
 import {Layout} from '../Layout';
-import {getFlipperLib} from 'flipper-plugin';
+import {
+  getFlipperLib,
+  _tryGetFlipperLibImplementation,
+} from 'flipper-plugin-core';
 import {DownOutlined, RightOutlined} from '@ant-design/icons';
 
 const {Text} = Typography;
@@ -115,7 +118,7 @@ class PartialHighlight extends PureComponent<{
   content: string;
 }> {
   static HighlightedText = styled.span<{selected: boolean}>((props) => ({
-    backgroundColor: theme.searchHighlightBackground,
+    backgroundColor: theme.searchHighlightBackground.yellow,
     color: props.selected ? `${theme.textColorPrimary} !important` : 'auto',
   }));
 
@@ -529,6 +532,9 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
     this.props.onElementSelected(key);
   };
 
+  isDarwin =
+    _tryGetFlipperLibImplementation()?.environmentInfo.os.platform === 'darwin';
+
   onKeyDown = (e: KeyboardEvent<any>) => {
     const {selected} = this.props;
     if (selected == null) {
@@ -550,8 +556,7 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
 
     if (
       e.key === 'c' &&
-      ((e.metaKey && process.platform === 'darwin') ||
-        (e.ctrlKey && process.platform !== 'darwin'))
+      ((e.metaKey && this.isDarwin) || (e.ctrlKey && this.isDarwin))
     ) {
       e.stopPropagation();
       e.preventDefault();

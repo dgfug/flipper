@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -43,9 +43,9 @@ export default function NetworkGraph() {
 
       const ctx = canvasRef.current!.getContext('2d')!;
       ctx.clearRect(0, 0, width, height);
-      ctx.strokeStyle = kiloBytesPerSecond >= 1000 ? '#f00' : '#ddd';
+      ctx.fillStyle = kiloBytesPerSecond >= 1000 ? '#f00' : '#bbb';
       ctx.font = 'lighter 10px arial';
-      ctx.strokeText(`${kiloBytesPerSecond} kB/s`, 0, height - 4);
+      ctx.fillText(`${kiloBytesPerSecond} kB/s`, 0, height - 4);
 
       setHoverText(
         'Total data traffic per plugin:\n\n' +

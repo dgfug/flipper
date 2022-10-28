@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -50,16 +50,6 @@ public class EnumMapping<T> {
       return mMapping.get(s);
     }
     return mMapping.get(mDefaultKey);
-  }
-
-  public InspectorValue<?> toPicker() {
-    return toPicker(true);
-  }
-
-  public InspectorValue<?> toPicker(final boolean mutable) {
-    return mutable
-        ? InspectorValue.mutable(Picker, new InspectorValue.Picker(mMapping.keySet(), mDefaultKey))
-        : InspectorValue.immutable(Enum, mDefaultKey);
   }
 
   public InspectorValue<?> toPicker(final T currentValue) {

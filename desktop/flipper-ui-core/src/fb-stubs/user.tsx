@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,8 +7,8 @@
  * @format
  */
 
+import {GraphFileUpload, User} from 'flipper-common';
 import {Atom, createState} from 'flipper-plugin';
-import {User} from '../reducers/user';
 
 export async function getUser(): Promise<User | null> {
   throw new Error('Feature not implemented');
@@ -19,7 +19,11 @@ export async function internGraphPOSTAPIRequest(
   _formFields: {
     [key: string]: any;
   } = {},
-  _internGraphUrl?: string,
+  _fileFields: Record<string, GraphFileUpload> = {},
+  _options: {
+    timeout?: number;
+    internGraphUrl?: string;
+  } = {},
 ): Promise<any> {
   throw new Error('Feature not implemented');
 }
@@ -29,7 +33,10 @@ export async function internGraphGETAPIRequest(
   _params: {
     [key: string]: any;
   } = {},
-  _internGraphUrl?: string,
+  _options: {
+    timeout?: number;
+    internGraphUrl?: string;
+  } = {},
 ): Promise<any> {
   throw new Error('Feature not implemented');
 }

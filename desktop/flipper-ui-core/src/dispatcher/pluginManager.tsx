@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,7 @@
  */
 
 import type {Store} from '../reducers/index';
-import type {Logger} from 'flipper-common';
+import type {Logger, ActivatablePluginDetails} from 'flipper-common';
 import {
   LoadPluginActionPayload,
   UninstallPluginActionPayload,
@@ -17,18 +17,11 @@ import {
   SwitchPluginActionPayload,
   PluginCommand,
 } from '../reducers/pluginManager';
-import {
-  getInstalledPlugins,
-  cleanupOldInstalledPluginVersions,
-  removePlugins,
-  ActivatablePluginDetails,
-} from 'flipper-plugin-lib';
 import {sideEffect} from '../utils/sideEffect';
 import {requirePlugin} from './plugins';
 import {showErrorNotification} from '../utils/notifications';
 import {PluginDefinition} from '../plugin';
 import type Client from '../Client';
-import {unloadModule} from '../utils/electronModuleCache';
 import {
   pluginLoaded,
   pluginUninstalled,
@@ -50,13 +43,18 @@ import {
   defaultEnabledBackgroundPlugins,
 } from '../utils/pluginUtils';
 import {getPluginKey} from '../utils/pluginKey';
-
-const maxInstalledPluginVersionsToKeep = 2;
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 async function refreshInstalledPlugins(store: Store) {
-  await removePlugins(store.getState().plugins.uninstalledPluginNames.values());
-  await cleanupOldInstalledPluginVersions(maxInstalledPluginVersionsToKeep);
-  const plugins = await getInstalledPlugins();
+  const flipperServer = getRenderHostInstance().flipperServer;
+  if (!flipperServer) {
+    throw new Error('Flipper Server not ready');
+  }
+  await flipperServer.exec(
+    'plugins-remove-plugins',
+    Array.from(store.getState().plugins.uninstalledPluginNames.values()),
+  );
+  const plugins = await flipperServer.exec('plugins-get-installed-plugins');
   return store.dispatch(registerInstalledPlugins(plugins));
 }
 
@@ -76,6 +74,7 @@ export default (
     });
   }
 
+  let running = false;
   const unsubscribeHandlePluginCommands = sideEffect(
     store,
     {
@@ -86,14 +85,49 @@ export default (
       noTimeBudgetWarns: true, // These side effects are critical, so we're doing them with zero throttling and want to avoid unnecessary warns
     },
     (state) => state.pluginManager.pluginCommandsQueue,
-    processPluginCommandsQueue,
+    async (_queue: PluginCommand[], store: Store) => {
+      // To make sure all commands are running in order, and not kicking off parallel command
+      // processing when new commands arrive (sideEffect doesn't await)
+      // we keep the 'running' flag, and keep running in a loop until the commandQueue is empty,
+      // to make sure any commands that have arrived during execution are executed
+      if (running) {
+        return; // will be picked up in while(true) loop
+      }
+      running = true;
+      try {
+        while (true) {
+          const remaining = store.getState().pluginManager.pluginCommandsQueue;
+          if (!remaining.length) {
+            return; // done
+          }
+          await processPluginCommandsQueue(remaining, store);
+          store.dispatch(pluginCommandsProcessed(remaining.length));
+        }
+      } finally {
+        running = false;
+      }
+    },
   );
   return async () => {
     unsubscribeHandlePluginCommands();
   };
 };
 
-export function processPluginCommandsQueue(
+export async function awaitPluginCommandQueueEmpty(store: Store) {
+  if (store.getState().pluginManager.pluginCommandsQueue.length === 0) {
+    return;
+  }
+  return new Promise<void>((resolve) => {
+    const unsubscribe = store.subscribe(() => {
+      if (store.getState().pluginManager.pluginCommandsQueue.length === 0) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
+async function processPluginCommandsQueue(
   queue: PluginCommand[],
   store: Store,
 ) {
@@ -101,7 +135,7 @@ export function processPluginCommandsQueue(
     try {
       switch (command.type) {
         case 'LOAD_PLUGIN':
-          loadPlugin(store, command.payload);
+          await loadPlugin(store, command.payload);
           break;
         case 'UNINSTALL_PLUGIN':
           uninstallPlugin(store, command.payload);
@@ -122,12 +156,12 @@ export function processPluginCommandsQueue(
       console.error('Failed to process command', command);
     }
   }
-  store.dispatch(pluginCommandsProcessed(queue.length));
 }
 
-function loadPlugin(store: Store, payload: LoadPluginActionPayload) {
+async function loadPlugin(store: Store, payload: LoadPluginActionPayload) {
   try {
-    const plugin = requirePlugin(payload.plugin);
+    unloadPluginModule(payload.plugin);
+    const plugin = await requirePlugin(payload.plugin);
     const enablePlugin = payload.enable;
     updatePlugin(store, {plugin, enablePlugin});
   } catch (err) {
@@ -150,9 +184,7 @@ function uninstallPlugin(store: Store, {plugin}: UninstallPluginActionPayload) {
     clients.forEach((client) => {
       stopPlugin(client, plugin.id);
     });
-    if (!plugin.details.isBundled) {
-      unloadPluginModule(plugin.details);
-    }
+    unloadPluginModule(plugin.details);
     store.dispatch(pluginUninstalled(plugin.details));
   } catch (err) {
     console.error(
@@ -261,17 +293,23 @@ function updateClientPlugin(
         .connections.enabledPlugins[c.query.app]?.includes(plugin.id)
     );
   });
-  const previousVersion = store.getState().plugins.clientPlugins.get(plugin.id);
   clientsWithEnabledPlugin.forEach((client) => {
     stopPlugin(client, plugin.id);
   });
   clientsWithEnabledPlugin.forEach((client) => {
     startPlugin(client, plugin, true);
   });
-  store.dispatch(pluginLoaded(plugin));
-  if (previousVersion) {
-    // unload previous version from Electron cache
-    unloadPluginModule(previousVersion.details);
+  if (
+    !store
+      .getState()
+      .plugins.disabledPlugins.find(
+        (disabledPlugin) => disabledPlugin.id === plugin.id,
+      ) &&
+    !store
+      .getState()
+      .plugins.gatekeepedPlugins.find((gkPlugin) => gkPlugin.id === plugin.id)
+  ) {
+    store.dispatch(pluginLoaded(plugin));
   }
 }
 
@@ -290,15 +328,21 @@ function updateDevicePlugin(
   devicesWithEnabledPlugin.forEach((d) => {
     d.unloadDevicePlugin(plugin.id);
   });
-  const previousVersion = store.getState().plugins.devicePlugins.get(plugin.id);
-  if (previousVersion) {
-    // unload previous version from Electron cache
-    unloadPluginModule(previousVersion.details);
-  }
-  store.dispatch(pluginLoaded(plugin));
   devicesWithEnabledPlugin.forEach((d) => {
     d.loadDevicePlugin(plugin);
   });
+  if (
+    !store
+      .getState()
+      .plugins.disabledPlugins.find(
+        (disabledPlugin) => disabledPlugin.id === plugin.id,
+      ) &&
+    !store
+      .getState()
+      .plugins.gatekeepedPlugins.find((gkPlugin) => gkPlugin.id === plugin.id)
+  ) {
+    store.dispatch(pluginLoaded(plugin));
+  }
 }
 
 function startPlugin(
@@ -335,9 +379,5 @@ function stopPlugin(
 }
 
 function unloadPluginModule(plugin: ActivatablePluginDetails) {
-  if (plugin.isBundled) {
-    // We cannot unload bundled plugin.
-    return;
-  }
-  unloadModule(plugin.entry);
+  getRenderHostInstance().unloadModule?.(plugin.entry);
 }

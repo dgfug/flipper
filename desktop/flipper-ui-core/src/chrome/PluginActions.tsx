@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,10 +13,7 @@ import {
   PlusOutlined,
 } from '@ant-design/icons';
 import {Alert, Button} from 'antd';
-import {
-  BundledPluginDetails,
-  DownloadablePluginDetails,
-} from 'flipper-plugin-lib';
+import {DownloadablePluginDetails} from 'flipper-common';
 import React, {useMemo} from 'react';
 import {useCallback} from 'react';
 import {useDispatch, useSelector} from 'react-redux';
@@ -89,16 +86,12 @@ function InstallButton({
   plugin,
   type = 'primary',
 }: {
-  plugin: DownloadablePluginDetails | BundledPluginDetails;
+  plugin: DownloadablePluginDetails;
   type: 'link' | 'primary';
 }) {
   const dispatch = useDispatch();
   const installPlugin = useCallback(() => {
-    if (plugin.isBundled) {
-      dispatch(loadPlugin({plugin, enable: true, notifyIfFailed: true}));
-    } else {
-      dispatch(startPluginDownload({plugin, startedByUser: true}));
-    }
+    dispatch(startPluginDownload({plugin, startedByUser: true}));
   }, [plugin, dispatch]);
   const downloads = useSelector(getPluginDownloadStatusMap);
   const downloadStatus = useMemo(

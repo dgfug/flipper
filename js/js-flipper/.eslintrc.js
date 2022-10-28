@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,12 +8,15 @@
  */
 
 const fbjs = require('eslint-config-fbjs');
-const prettierConfig = require('./prettierrc.json')
+const prettierConfig = require('./.prettierrc.json');
 
-const pattern = /^\*\r?\n[\S\s]*Facebook[\S\s]* \* @format\r?\n/;
+const pattern = /^\*\r?\n[\S\s]*Meta[\S\s]* \* @format\r?\n/;
 
 module.exports = {
-  parser: 'babel-eslint',
+  parser: '@babel/eslint-parser',
+  parserOptions: {
+    requireConfigFile: false,
+  },
   root: true,
   extends: ['fbjs', 'prettier'],
   plugins: [

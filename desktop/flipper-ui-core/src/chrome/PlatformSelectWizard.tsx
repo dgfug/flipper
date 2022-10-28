@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,20 +11,19 @@ import React, {Component} from 'react';
 import {updateSettings, Action} from '../reducers/settings';
 import {connect} from 'react-redux';
 import {State as Store} from '../reducers';
-import {Settings} from '../reducers/settings';
 import {flush} from '../utils/persistor';
 import ToggledSection from './settings/ToggledSection';
 import {isEqual} from 'lodash';
-import {reportUsage} from 'flipper-common';
+import {Platform, reportUsage, Settings} from 'flipper-common';
 import {Modal, Button} from 'antd';
 import {Layout, withTrackingScope, _NuxManagerContext} from 'flipper-plugin';
-import {getRenderHostInstance} from '../RenderHost';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const WIZARD_FINISHED_LOCAL_STORAGE_KEY = 'platformSelectWizardFinished';
 
 type OwnProps = {
   onHide: () => void;
-  platform: NodeJS.Platform;
+  platform: Platform;
 };
 
 type StateFromProps = {
@@ -124,6 +123,7 @@ class PlatformSelectWizard extends Component<Props, State> {
     return (
       <Modal
         visible
+        centered
         onCancel={() => {
           this.props.onHide();
           markWizardAsCompleted();

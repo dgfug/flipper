@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,7 @@
 import React, {useMemo} from 'react';
 import {Children, cloneElement, createContext, useContext} from 'react';
 import reactElementToJSXString from 'react-element-to-jsx-string';
-import {v4 as uuid} from 'uuid';
+import {uuid} from 'flipper-common';
 
 export type InteractionReport = {
   // Duration of the event handler itself, not including any time the promise handler might have been pending

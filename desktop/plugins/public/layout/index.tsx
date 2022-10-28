@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,6 @@ import {
   Toolbar,
   DetailSidebar,
   Button,
-  GK,
   Idler,
   ReduxState,
   ArchivedDevice,
@@ -36,10 +35,12 @@ import {
   IDEType,
 } from 'flipper';
 import {message} from 'antd';
+import {getFlipperLib} from 'flipper-plugin';
 
 type State = {
   init: boolean;
   inTargetMode: boolean;
+  inSnapshotMode: boolean;
   inAXMode: boolean;
   inAlignmentMode: boolean;
   selectedElement: ElementID | null | undefined;
@@ -201,6 +202,7 @@ export default class LayoutPlugin extends FlipperPlugin<
   state: State = {
     init: false,
     inTargetMode: false,
+    inSnapshotMode: false,
     inAXMode: false,
     inAlignmentMode: false,
     selectedElement: null,
@@ -285,10 +287,14 @@ export default class LayoutPlugin extends FlipperPlugin<
     );
     const resolvedPath = IDEFileResolver.getBestPath(paths, params.className);
     if (this.client.isConnected) {
-      this.client.send('setResolvedPath', {
-        className: params.className,
-        resolvedPath: resolvedPath,
-      });
+      this.client
+        .call('setResolvedPath', {
+          className: params.className,
+          resolvedPath: resolvedPath,
+        })
+        .catch((e) => {
+          console.warn('[Layout] setResolvePath failed with error', e);
+        });
     }
   };
 
@@ -313,8 +319,14 @@ export default class LayoutPlugin extends FlipperPlugin<
     if (this.client.isConnected) {
       const inTargetMode = !this.state.inTargetMode;
       this.setState({inTargetMode});
-      this.client.send('setSearchActive', {active: inTargetMode});
+      this.client.call('setSearchActive', {active: inTargetMode}).catch((e) => {
+        console.warn('[Layout] setSearchActive failed with error', e);
+      });
     }
+  };
+
+  onToggleSnapshotMode = () => {
+    this.setState((prevState) => ({inSnapshotMode: !prevState.inSnapshotMode}));
   };
 
   onToggleAXMode = () => {
@@ -382,12 +394,16 @@ export default class LayoutPlugin extends FlipperPlugin<
       path: Array.from(path).splice(1).join(),
       ...this.realClient.query,
     });
-    this.client.call('setData', {
-      id,
-      path,
-      value,
-      ax: this.state.inAXMode,
-    });
+    this.client
+      .call('setData', {
+        id,
+        path,
+        value,
+        ax: this.state.inAXMode,
+      })
+      .catch((e) => {
+        console.warn('[Layout] setData failed with error', e);
+      });
   };
 
   loadScreenDimensions(): {width: number; height: number} | null {
@@ -463,7 +479,9 @@ export default class LayoutPlugin extends FlipperPlugin<
       </Sidebar>
     ) : null;
 
-    const showAnalyzeYogaPerformanceButton = GK.get('flipper_yogaperformance');
+    const showAnalyzeYogaPerformanceButton = getFlipperLib().GK(
+      'flipper_yogaperformance',
+    );
 
     if (!this.state.init) {
       return null;
@@ -474,14 +492,25 @@ export default class LayoutPlugin extends FlipperPlugin<
           <Toolbar>
             {!this.props.isArchivedDevice && (
               <ToolbarIcon
+                key="targetMode"
                 onClick={this.onToggleTargetMode}
                 title="Toggle target mode"
                 icon="target"
                 active={this.state.inTargetMode}
               />
             )}
+            {!this.props.isArchivedDevice && (
+              <ToolbarIcon
+                key="snapshotMode"
+                onClick={this.onToggleSnapshotMode}
+                title="Toggle to see view snapshots on the attribute inspector"
+                icon="eye"
+                active={this.state.inSnapshotMode}
+              />
+            )}
             {this.realClient.query.os === 'Android' && (
               <ToolbarIcon
+                key="axMode"
                 onClick={this.onToggleAXMode}
                 title="Toggle to see the accessibility hierarchy"
                 icon="accessibility"
@@ -490,6 +519,7 @@ export default class LayoutPlugin extends FlipperPlugin<
             )}
             {!this.props.isArchivedDevice && (
               <ToolbarIcon
+                key="alignmentMode"
                 onClick={this.onToggleAlignmentMode}
                 title="Toggle AlignmentMode to show alignment lines"
                 icon="borders"
@@ -498,6 +528,7 @@ export default class LayoutPlugin extends FlipperPlugin<
             )}
             {this.props.isArchivedDevice && this.state.visualizerScreenshot && (
               <ToolbarIcon
+                key="visualizer"
                 onClick={this.onToggleVisualizer}
                 title="Toggle visual recreation of layout"
                 icon="mobile"
@@ -532,6 +563,7 @@ export default class LayoutPlugin extends FlipperPlugin<
             client={this.getClient()}
             realClient={this.realClient}
             element={element}
+            inSnapshotMode={this.state.inSnapshotMode}
             onValueChanged={this.onDataValueChanged}
             logger={this.props.logger}
           />

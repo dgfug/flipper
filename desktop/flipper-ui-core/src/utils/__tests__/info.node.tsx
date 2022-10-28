@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,7 +15,7 @@ import {registerLoadedPlugins} from '../../reducers/plugins';
 import {TestUtils} from 'flipper-plugin';
 import {getLogger} from 'flipper-common';
 import {selectPlugin} from '../../reducers/connections';
-import {renderMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
+import {renderMockFlipperWithPlugin} from '../../__tests__/test-utils/createMockFlipperWithPlugin';
 
 const networkPluginDetails = TestUtils.createMockPluginDetails({
   id: 'Network',

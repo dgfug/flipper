@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,26 +12,40 @@ import {Radio} from 'antd';
 import {updateSettings, Action} from '../reducers/settings';
 import {
   Action as LauncherAction,
-  LauncherSettings,
   updateLauncherSettings,
 } from '../reducers/launcherSettings';
 import {connect} from 'react-redux';
 import {State as Store} from '../reducers';
-import {Settings, DEFAULT_ANDROID_SDK_PATH} from '../reducers/settings';
 import {flush} from '../utils/persistor';
 import ToggledSection from './settings/ToggledSection';
-import {FilePathConfigField, ConfigText} from './settings/configFields';
+import {
+  FilePathConfigField,
+  ConfigText,
+  URLConfigField,
+} from './settings/configFields';
 import KeyboardShortcutInput from './settings/KeyboardShortcutInput';
 import {isEqual, isMatch, isEmpty} from 'lodash';
 import LauncherSettingsPanel from '../fb-stubs/LauncherSettingsPanel';
-import {reportUsage} from 'flipper-common';
+import {
+  LauncherSettings,
+  Platform,
+  reportUsage,
+  Settings,
+  sleep,
+} from 'flipper-common';
 import {Modal, message, Button} from 'antd';
-import {Layout, withTrackingScope, _NuxManagerContext} from 'flipper-plugin';
-import {getRenderHostInstance} from '../RenderHost';
+import {
+  Layout,
+  withTrackingScope,
+  _NuxManagerContext,
+  NUX,
+} from 'flipper-plugin';
+import {getRenderHostInstance} from 'flipper-frontend-core';
+import {loadTheme} from '../utils/loadTheme';
 
 type OwnProps = {
   onHide: () => void;
-  platform: NodeJS.Platform;
+  platform: Platform;
   noModal?: boolean; // used for testing
 };
 
@@ -69,9 +83,9 @@ class SettingsSheet extends Component<Props, State> {
     this.props.updateSettings(this.state.updatedSettings);
     this.props.updateLauncherSettings(this.state.updatedLauncherSettings);
     this.props.onHide();
-    return flush().then(() => {
-      getRenderHostInstance().restartFlipper(true);
-    });
+    await flush();
+    await sleep(1000);
+    getRenderHostInstance().restartFlipper(true);
   };
 
   applyChangesWithoutRestart = async () => {
@@ -88,12 +102,13 @@ class SettingsSheet extends Component<Props, State> {
     return (
       <Modal
         visible
+        centered
         onCancel={this.props.onHide}
         width={570}
         title="Settings"
         footer={footer}
         bodyStyle={{
-          overflow: 'scroll',
+          overflow: 'auto',
           maxHeight: 'calc(100vh - 250px)',
         }}>
         {contents}
@@ -112,7 +127,17 @@ class SettingsSheet extends Component<Props, State> {
       reactNative,
       darkMode,
       suppressPluginErrors,
+      persistDeviceData,
+      enablePluginMarketplace,
+      enablePluginMarketplaceAutoUpdate,
+      marketplaceURL,
+      server,
     } = this.state.updatedSettings;
+
+    const serverUsageEnabled = getRenderHostInstance().GK(
+      'flipper_desktop_use_server',
+    );
+    const serverType = getRenderHostInstance().serverConfig.type;
 
     const settingsPristine =
       isEqual(this.props.settings, this.state.updatedSettings) &&
@@ -142,7 +167,9 @@ class SettingsSheet extends Component<Props, State> {
           }}>
           <FilePathConfigField
             label="Android SDK location"
-            resetValue={DEFAULT_ANDROID_SDK_PATH}
+            resetValue={
+              getRenderHostInstance().serverConfig.settings.androidHome
+            }
             defaultValue={androidHome}
             onChange={(v) => {
               this.setState({
@@ -244,6 +271,18 @@ class SettingsSheet extends Component<Props, State> {
             }));
           }}
         />
+        <ToggledSection
+          label="Persist data in plugins after device disconnects"
+          toggled={persistDeviceData}
+          onChange={(enabled) => {
+            this.setState((prevState) => ({
+              updatedSettings: {
+                ...prevState.updatedSettings,
+                persistDeviceData: enabled,
+              },
+            }));
+          }}
+        />
         <Layout.Container style={{paddingLeft: 15, paddingBottom: 10}}>
           Theme Selection
           <Radio.Group
@@ -255,6 +294,7 @@ class SettingsSheet extends Component<Props, State> {
                   darkMode: event.target.value,
                 },
               }));
+              loadTheme(event.target.value);
             }}>
             <Radio.Button value="dark">Dark</Radio.Button>
             <Radio.Button value="light">Light</Radio.Button>
@@ -314,6 +354,103 @@ class SettingsSheet extends Component<Props, State> {
               }));
             }}
           />
+        </ToggledSection>
+        <NUX
+          // TODO: provide link to Flipper doc with more details
+          title="Plugin marketplace serve as a way to distribute private/internal plugins"
+          placement="right">
+          <ToggledSection
+            label="Enable plugin marketplace"
+            toggled={enablePluginMarketplace}
+            frozen={false}
+            onChange={(v) => {
+              this.setState({
+                updatedSettings: {
+                  ...this.state.updatedSettings,
+                  enablePluginMarketplace: v,
+                },
+              });
+            }}>
+            <URLConfigField
+              label="Martkeplace URL"
+              defaultValue={
+                marketplaceURL || 'http://plugin-marketplace.local/get-plugins'
+              }
+              onChange={(v) => {
+                this.setState({
+                  updatedSettings: {
+                    ...this.state.updatedSettings,
+                    marketplaceURL: v,
+                  },
+                });
+              }}
+            />
+            <ToggledSection
+              label="Enable auto update"
+              toggled={enablePluginMarketplaceAutoUpdate}
+              frozen={false}
+              onChange={(v) => {
+                this.setState({
+                  updatedSettings: {
+                    ...this.state.updatedSettings,
+                    enablePluginMarketplaceAutoUpdate: v,
+                  },
+                });
+              }}
+            />
+          </ToggledSection>
+        </NUX>
+        <ToggledSection
+          label="Server (Experimental)"
+          toggled={(serverUsageEnabled && (!server || server.enabled)) ?? false}
+          frozen={!serverUsageEnabled}
+          onChange={(v) => {
+            this.setState((prevState) => ({
+              updatedSettings: {
+                ...prevState.updatedSettings,
+                server: {enabled: v},
+              },
+            }));
+          }}>
+          {serverUsageEnabled ? (
+            <>
+              <ConfigText
+                content={
+                  "For changes to take effect, click on 'Apply and Restart'"
+                }
+              />
+              {serverType ? (
+                <>
+                  <ConfigText
+                    content={`Flipper is currently using an '${serverType}' server.`}
+                  />
+                  {serverType === 'external' ? (
+                    <>
+                      <br />
+                      <span>
+                        To stop the server, it may be necessary to kill the
+                        process listening at port <b>52342</b>. See below:
+                      </span>
+                      <br />
+                      <code>
+                        sudo lsof -i -P | grep LISTEN | grep <b>52342</b>
+                        <br />
+                        sudo kill &lt;PID&gt;
+                      </code>
+                    </>
+                  ) : (
+                    <></>
+                  )}
+                </>
+              ) : (
+                <></>
+              )}
+            </>
+          ) : (
+            <ConfigText
+              content={'The usage of flipperd (server) is currently disabled.'}
+            />
+          )}
         </ToggledSection>
         <Layout.Right center>
           <span>Reset all new user tooltips</span>

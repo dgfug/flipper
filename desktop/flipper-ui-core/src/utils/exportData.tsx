@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,41 +8,42 @@
  */
 
 import * as React from 'react';
-import os from 'os';
-import path from 'path';
-import {getLogger} from 'flipper-common';
+import {
+  getLogger,
+  DeviceDebugFile,
+  DeviceDebugCommand,
+  timeout,
+  getStringFromErrorLike,
+} from 'flipper-common';
 import {Store, MiddlewareAPI} from '../reducers';
-import {DeviceExport} from '../devices/BaseDevice';
+import {DeviceExport} from 'flipper-frontend-core';
 import {selectedPlugins, State as PluginsState} from '../reducers/plugins';
 import {PluginNotification} from '../reducers/notifications';
 import Client, {ClientExport} from '../Client';
 import {getAppVersion} from './info';
 import {pluginKey} from '../utils/pluginKey';
 import {DevicePluginMap, ClientPluginMap} from '../plugin';
-import {default as BaseDevice} from '../devices/BaseDevice';
-import {default as ArchivedDevice} from '../devices/ArchivedDevice';
-import fs from 'fs-extra';
+import {BaseDevice} from 'flipper-frontend-core';
+import {ArchivedDevice} from 'flipper-frontend-core';
 import {v4 as uuidv4} from 'uuid';
-import {readCurrentRevision} from './packageMetadata';
 import {tryCatchReportPlatformFailures} from 'flipper-common';
 import {TestIdler} from './Idler';
-import {setStaticView} from '../reducers/connections';
-import {
-  resetSupportFormV2State,
-  SupportFormRequestDetailsState,
-} from '../reducers/supportForm';
-import {deconstructClientId} from 'flipper-common';
-import {performance} from 'perf_hooks';
 import {processMessageQueue} from './messageQueue';
 import {getPluginTitle} from './pluginUtils';
 import {capture} from './screenshot';
-import {uploadFlipperMedia} from '../fb-stubs/user';
-import {Dialog, Idler} from 'flipper-plugin';
+import {Dialog, getFlipperLib, Idler, path} from 'flipper-plugin';
 import {ClientQuery} from 'flipper-common';
 import ShareSheetExportUrl from '../chrome/ShareSheetExportUrl';
 import ShareSheetExportFile from '../chrome/ShareSheetExportFile';
 import ExportDataPluginSheet from '../chrome/ExportDataPluginSheet';
-import {getRenderHostInstance} from '../RenderHost';
+import {getRenderHostInstance} from 'flipper-frontend-core';
+import {uploadFlipperMedia} from '../fb-stubs/user';
+import {exportLogs} from '../chrome/ConsoleLogs';
+import JSZip from 'jszip';
+import {safeFilename} from './safeFilename';
+import {getExportablePlugins} from '../selectors/connections';
+import {notification} from 'antd';
+import openSupportRequestForm from '../fb-stubs/openSupportRequestForm';
 
 export const IMPORT_FLIPPER_TRACE_EVENT = 'import-flipper-trace';
 export const EXPORT_FLIPPER_TRACE_EVENT = 'export-flipper-trace';
@@ -70,7 +71,6 @@ export type ExportType = {
   // The GraphQL plugin relies on this format for generating
   // Flipper traces from employee dogfooding. See D28209561.
   pluginStates2: SandyPluginStates;
-  supportRequestDetails?: SupportFormRequestDetailsState;
 };
 
 type ProcessNotificationStatesOptions = {
@@ -244,7 +244,8 @@ async function addSaltToDeviceSerial({
     }
     return {...notif, client: notif.client.replace(serial, newSerial)};
   });
-  const revision: string | undefined = await readCurrentRevision();
+  const revision: string | undefined =
+    getRenderHostInstance().serverConfig.environmentInfo.flipperReleaseRevision;
   return {
     fileVersion: getAppVersion() || 'unknown',
     flipperReleaseRevision: revision,
@@ -485,15 +486,6 @@ export async function exportStore(
     statusUpdate,
     idler,
   );
-  if (includeSupportDetails) {
-    exportData.supportRequestDetails = {
-      ...state.supportForm?.supportFormV2,
-      appName:
-        state.connections.selectedAppId == null
-          ? ''
-          : deconstructClientId(state.connections.selectedAppId).app,
-    };
-  }
 
   statusUpdate && statusUpdate('Serializing Flipper data...');
   const serializedString = JSON.stringify(exportData);
@@ -523,17 +515,23 @@ export const exportStoreToFile = (
 }> => {
   return exportStore(store, includeSupportDetails, idler, statusUpdate).then(
     async ({serializedString, fetchMetaDataErrors}) => {
-      await fs.writeFile(exportFilePath, serializedString);
-      store.dispatch(resetSupportFormV2State());
+      await getFlipperLib().remoteServerContext.fs.writeFile(
+        exportFilePath,
+        serializedString,
+      );
       return {fetchMetaDataErrors};
     },
   );
 };
 
-export function importDataToStore(source: string, data: string, store: Store) {
+export async function importDataToStore(
+  source: string,
+  data: string,
+  store: Store,
+) {
   getLogger().track('usage', IMPORT_FLIPPER_TRACE_EVENT);
   const json: ExportType = JSON.parse(data);
-  const {device, clients, supportRequestDetails, deviceScreenshot} = json;
+  const {device, clients, deviceScreenshot} = json;
   if (device == null) {
     return;
   }
@@ -546,7 +544,6 @@ export function importDataToStore(source: string, data: string, store: Store) {
     os,
     screenshotHandle: deviceScreenshot,
     source,
-    supportRequestDetails,
   });
   archivedDevice.loadDevicePlugins(
     store.getState().plugins.devicePlugins,
@@ -562,12 +559,11 @@ export function importDataToStore(source: string, data: string, store: Store) {
     payload: archivedDevice,
   });
 
-  clients.forEach((client: {id: string; query: ClientQuery}) => {
-    const sandyPluginStates = json.pluginStates2[client.id] || {};
-    const clientPlugins = new Set(Object.keys(sandyPluginStates));
-    store.dispatch({
-      type: 'NEW_CLIENT',
-      payload: new Client(
+  await Promise.all(
+    clients.map(async (client: {id: string; query: ClientQuery}) => {
+      const sandyPluginStates = json.pluginStates2[client.id] || {};
+      const clientPlugins = new Set(Object.keys(sandyPluginStates));
+      const clientInstance = await new Client(
         client.id,
         client.query,
         null,
@@ -575,28 +571,27 @@ export function importDataToStore(source: string, data: string, store: Store) {
         store,
         clientPlugins,
         archivedDevice,
-      ).initFromImport(sandyPluginStates),
-    });
-  });
-  if (supportRequestDetails) {
-    store.dispatch(
-      // Late require to avoid circular dependency issue
-      setStaticView(require('../fb-stubs/SupportRequestDetails').default),
-    );
-  }
+        getRenderHostInstance().flipperServer,
+      ).initFromImport(sandyPluginStates);
+      store.dispatch({
+        type: 'NEW_CLIENT',
+        payload: clientInstance,
+      });
+    }),
+  );
 }
 
-export const importFileToStore = (file: string, store: Store) => {
-  fs.readFile(file, 'utf8', (err, data) => {
-    if (err) {
-      console.error(
-        `[exportData] importFileToStore for file ${file} failed:`,
-        err,
-      );
-      return;
-    }
+export const importFileToStore = async (file: string, store: Store) => {
+  try {
+    const data = await getFlipperLib().remoteServerContext.fs.readFile(file);
     importDataToStore(file, data, store);
-  });
+  } catch (err) {
+    console.error(
+      `[exportData] importFileToStore for file ${file} failed:`,
+      err,
+    );
+    return;
+  }
 };
 
 export function canOpenDialog() {
@@ -621,10 +616,161 @@ export function canFileExport() {
   return !!getRenderHostInstance().showSaveDialog;
 }
 
+async function startDeviceFlipperFolderExport() {
+  return await getRenderHostInstance().flipperServer.exec(
+    {timeout: 3 * 60 * 1000},
+    'fetch-debug-data',
+  );
+}
+
+export type ExportEverythingEverywhereAllAtOnceStatus =
+  | ['logs']
+  | ['files']
+  | ['state']
+  | ['archive']
+  | ['upload']
+  | ['support']
+  | ['done']
+  | ['error', string]
+  | ['cancelled'];
+export async function exportEverythingEverywhereAllAtOnce(
+  store: MiddlewareAPI,
+  onStatusUpdate?: (...args: ExportEverythingEverywhereAllAtOnceStatus) => void,
+  openSupportRequest?: boolean,
+) {
+  const zip = new JSZip();
+
+  // Step 1: Export Flipper logs
+  onStatusUpdate?.('logs');
+  const serializedLogs = exportLogs
+    .map((item) => JSON.stringify(item))
+    .join('\n');
+
+  zip.file('flipper_logs.txt', serializedLogs);
+
+  try {
+    // Step 2: Export device logs
+    onStatusUpdate?.('files');
+    const flipperFolderContent = await startDeviceFlipperFolderExport();
+
+    const deviceFlipperFolder = zip.folder('device_flipper_folder')!;
+    flipperFolderContent.forEach((deviceDebugItem) => {
+      const deviceAppFolder = deviceFlipperFolder.folder(
+        safeFilename(`${deviceDebugItem.serial}__${deviceDebugItem.appId}`),
+      )!;
+
+      deviceDebugItem.data.forEach((appDebugItem) => {
+        const appDebugItemIsFile = (
+          item: DeviceDebugFile | DeviceDebugCommand,
+        ): item is DeviceDebugFile => !!(appDebugItem as DeviceDebugFile).path;
+
+        if (appDebugItemIsFile(appDebugItem)) {
+          deviceAppFolder.file(
+            safeFilename(appDebugItem.path),
+            appDebugItem.data,
+          );
+        } else {
+          deviceAppFolder.file(
+            safeFilename(appDebugItem.command),
+            appDebugItem.result,
+          );
+        }
+      });
+    });
+  } catch (e) {
+    console.error(
+      'exportEverythingEverywhereAllAtOnce -> failed to export Flipper device debug data',
+      e,
+    );
+  }
+
+  try {
+    // Step 3: Export Flipper State
+    onStatusUpdate?.('state');
+    const exportablePlugins = getExportablePlugins(store.getState());
+    // TODO: no need to put this in the store,
+    // need to be cleaned up later in combination with SupportForm
+    store.dispatch(selectedPlugins(exportablePlugins.map(({id}) => id)));
+    const {serializedString} = await timeout(2 * 60 * 1000, exportStore(store));
+
+    zip.file('flipper_export', serializedString);
+  } catch (e) {
+    console.error(
+      'exportEverythingEverywhereAllAtOnce -> failed to export Flipper state',
+      e,
+    );
+  }
+
+  onStatusUpdate?.('archive');
+  const archiveData = await zip.generateAsync({type: 'uint8array'});
+
+  const exportedFilePath = await getRenderHostInstance().exportFileBinary?.(
+    archiveData,
+    {
+      defaultPath: 'flipper_EEAaO_export',
+    },
+  );
+
+  if (openSupportRequest) {
+    if (exportedFilePath) {
+      onStatusUpdate?.('upload');
+
+      let everythingEverywhereAllAtOnceExportDownloadURL: string | undefined;
+      try {
+        everythingEverywhereAllAtOnceExportDownloadURL =
+          await getRenderHostInstance().flipperServer.exec(
+            'intern-cloud-upload',
+            exportedFilePath,
+          );
+      } catch (e) {
+        console.error(
+          'exportEverythingEverywhereAllAtOnce -> failed to upload export to intern',
+          exportedFilePath,
+        );
+        notification.warn({
+          message: 'Failed to upload debug data',
+          description: `Flipper failed to upload debug export (${exportedFilePath}) automatically. Please, attach it to the support request manually in the comments after it is created.`,
+          duration: null,
+        });
+      }
+
+      onStatusUpdate?.('support');
+      try {
+        await openSupportRequestForm(store.getState(), {
+          everythingEverywhereAllAtOnceExportDownloadURL,
+        });
+        onStatusUpdate?.('done');
+      } catch (e) {
+        console.error(
+          'exportEverythingEverywhereAllAtOnce -> failed to create a support request',
+          e,
+        );
+        onStatusUpdate?.('error', getStringFromErrorLike(e));
+      }
+    } else {
+      notification.warn({
+        message: 'Export cancelled',
+        description: `Exporting Flipper debug data was cancelled. Flipper team will not be able to help you without this data. Please, restart the export.`,
+        duration: null,
+      });
+      onStatusUpdate?.('cancelled');
+    }
+  } else {
+    if (exportedFilePath) {
+      onStatusUpdate?.('done');
+    } else {
+      onStatusUpdate?.('cancelled');
+    }
+  }
+}
+
 export async function startFileExport(dispatch: Store['dispatch']) {
   const file = await getRenderHostInstance().showSaveDialog?.({
     title: 'FlipperExport',
-    defaultPath: path.join(os.homedir(), 'FlipperExport.flipper'),
+    defaultPath: path.join(
+      getRenderHostInstance().serverConfig.paths.homePath,
+      'FlipperExport.flipper',
+    ),
   });
   if (!file) {
     return;

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -37,11 +37,14 @@ export default class WebSocketClientConnection implements ClientConnection {
     });
   }
 
-  matchPendingRequest(id: number): PendingRequestResolvers {
+  matchPendingRequest(id: number): PendingRequestResolvers | undefined {
     const callbacks = this.pendingRequests.get(id);
 
     if (!callbacks) {
-      throw new Error(`Pending request ${id} is not found`);
+      console.debug(`[conn] Pending request ${id} is not found. Ignore.`);
+      // It must be a response for a message from the older connection. Ignore.
+      // TODO: When we decide to bump sdk_version, make `id` a string equal to `connectionId:messageId`. Ignore messages only from other conections. Raise an error for missing mesages from this connection.
+      return;
     }
 
     this.pendingRequests.delete(id);

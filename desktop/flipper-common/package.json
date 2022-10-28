@@ -8,9 +8,11 @@
   "types": "lib/index.d.ts",
   "license": "MIT",
   "bugs": "https://github.com/facebook/flipper/issues",
-  "dependencies": {},
+  "dependencies": {
+    "uuid": "^8.3.2"
+  },
   "devDependencies": {
-    "flipper-plugin-lib": "0.0.0"
+    "@types/uuid": "^8.3.4"
   },
   "peerDependencies": {},
   "scripts": {

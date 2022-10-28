@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,8 +14,8 @@ import {
   registerInstalledPlugins,
 } from '../plugins';
 import {FlipperPlugin, FlipperDevicePlugin, BaseAction} from '../../plugin';
-import {InstalledPluginDetails} from 'flipper-plugin-lib';
-import {wrapSandy} from '../../test-utils/createMockFlipperWithPlugin';
+import {InstalledPluginDetails} from 'flipper-common';
+import {wrapSandy} from '../../__tests__/test-utils/createMockFlipperWithPlugin';
 
 const testPluginOrig = class extends FlipperPlugin<any, BaseAction, any> {
   static id = 'TestPlugin';
@@ -37,7 +37,6 @@ test('add clientPlugin', () => {
       devicePlugins: new Map(),
       clientPlugins: new Map(),
       loadedPlugins: new Map(),
-      bundledPlugins: new Map(),
       gatekeepedPlugins: [],
       failedPlugins: [],
       disabledPlugins: [],
@@ -58,7 +57,6 @@ test('add devicePlugin', () => {
       devicePlugins: new Map(),
       clientPlugins: new Map(),
       loadedPlugins: new Map(),
-      bundledPlugins: new Map(),
       gatekeepedPlugins: [],
       failedPlugins: [],
       disabledPlugins: [],
@@ -79,7 +77,6 @@ test('do not add plugin twice', () => {
       devicePlugins: new Map(),
       clientPlugins: new Map(),
       loadedPlugins: new Map(),
-      bundledPlugins: new Map(),
       gatekeepedPlugins: [],
       failedPlugins: [],
       disabledPlugins: [],
@@ -103,7 +100,6 @@ test('add gatekeeped plugin', () => {
       specVersion: 2,
       pluginType: 'client',
       source: 'src/index.ts',
-      isBundled: false,
       isActivatable: true,
       main: 'lib/index.js',
       title: 'test',
@@ -116,7 +112,6 @@ test('add gatekeeped plugin', () => {
       devicePlugins: new Map(),
       clientPlugins: new Map(),
       loadedPlugins: new Map(),
-      bundledPlugins: new Map(),
       gatekeepedPlugins: [],
       failedPlugins: [],
       disabledPlugins: [],
@@ -143,7 +138,6 @@ const EXAMPLE_PLUGIN = {
   dir: '/plugins/test',
   specVersion: 2,
   source: 'src/index.ts',
-  isBundled: false,
   isActivatable: true,
   main: 'lib/index.js',
   title: 'test',

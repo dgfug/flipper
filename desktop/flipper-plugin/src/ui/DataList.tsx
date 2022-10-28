@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -22,7 +22,7 @@ import {theme} from './theme';
 import styled from '@emotion/styled';
 import {DataTableManager} from './data-table/DataTableManager';
 import {useAssertStableRef} from '../utils/useAssertStableRef';
-import {DataSource} from '../data-source';
+import {DataSource} from 'flipper-plugin-core';
 import {useMakeStableCallback} from '../utils/useMakeStableCallback';
 
 const {Text} = Typography;
@@ -95,7 +95,9 @@ export const DataList: (<T extends object>(
   }: DataListProps<T>) {
     // if a tableManagerRef is provided, we piggy back on that same ref
     // eslint-disable-next-line
-    const tableManagerRef = tableProps.tableManagerRef ?? createRef<undefined | DataTableManager<T>>();
+    const tableManagerRef =
+      tableProps.tableManagerRef ??
+      createRef<undefined | DataTableManager<T>>();
 
     useAssertStableRef(onRenderItem, 'onRenderItem');
     useAssertStableRef(enableArrow, 'enableArrow');
@@ -204,6 +206,7 @@ export const DataList: (<T extends object>(
   enableArrow: true,
   enableContextMenu: false,
   enableMultiSelect: false,
+  enableHorizontalScroll: false,
   idAttribute: 'id',
   titleAttribute: 'title',
   descriptionAttribute: 'description',
@@ -212,12 +215,12 @@ export const DataList: (<T extends object>(
   enableArrow: true,
 };
 
-interface DataListItemProps {
+type DataListItemProps = {
   // TODO: add icon support
   title?: string | React.ReactElement;
   description?: string | React.ReactElement;
   enableArrow?: boolean;
-}
+};
 
 const ArrowWrapper = styled.div({
   flex: 0,

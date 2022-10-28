@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -63,7 +63,8 @@ export const getActiveDevice = createSelector(
     }
     // if there is an active app, use device owning the app
     if (client) {
-      return client.device;
+      // TODO: Will be fixed later in the stack
+      return client.device as any;
     }
     return selectedDevice;
   },
@@ -85,7 +86,6 @@ export const getPluginLists = createSelector(
     plugins: {
       clientPlugins,
       devicePlugins,
-      bundledPlugins,
       marketplacePlugins,
       loadedPlugins,
       disabledPlugins,
@@ -95,7 +95,6 @@ export const getPluginLists = createSelector(
   }: State) => ({
     clientPlugins,
     devicePlugins,
-    bundledPlugins,
     marketplacePlugins,
     loadedPlugins,
     disabledPlugins,

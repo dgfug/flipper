@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,6 +32,7 @@ import {debounce} from 'lodash';
 import {DEFAULT_ROW_HEIGHT} from './types';
 import {notNull} from '../../../utils/typeUtils';
 import {getFlipperLib, textContent} from 'flipper-plugin';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const EMPTY_OBJECT = {};
 Object.freeze(EMPTY_OBJECT);
@@ -154,7 +155,7 @@ type ManagedTableState = {
 };
 
 const Container = styled(FlexColumn)<{canOverflow?: boolean}>((props) => ({
-  overflow: props.canOverflow ? 'scroll' : 'visible',
+  overflow: props.canOverflow ? 'auto' : 'visible',
   flexGrow: 1,
   height: '100%',
 }));
@@ -201,7 +202,7 @@ export class ManagedTable extends React.Component<
       Object.keys(this.props.columns).map((key) => ({key, visible: true}));
     this.state = {
       columnOrder,
-      columnKeys: this.computeColumnKeys(columnOrder),
+      columnKeys: this.computeColumnKeys(columnOrder, this.props.columns),
       columnSizes:
         this.props.tableKey && globalTableState[this.props.tableKey]
           ? globalTableState[this.props.tableKey]
@@ -253,7 +254,10 @@ export class ManagedTable extends React.Component<
       }
       this.setState({
         columnOrder: nextProps.columnOrder,
-        columnKeys: this.computeColumnKeys(nextProps.columnOrder),
+        columnKeys: this.computeColumnKeys(
+          nextProps.columnOrder,
+          this.props.columns,
+        ),
       });
     }
 
@@ -299,8 +303,12 @@ export class ManagedTable extends React.Component<
     this.firstUpdate = false;
   }
 
-  computeColumnKeys(columnOrder: TableColumnOrder) {
-    return columnOrder.map((k) => (k.visible ? k.key : null)).filter(notNull);
+  computeColumnKeys(columnOrder: TableColumnOrder, columns: TableColumns) {
+    return columnOrder
+      .map((k) =>
+        k.visible && Object.keys(columns).includes(k.key) ? k.key : null,
+      )
+      .filter(notNull);
   }
 
   scrollToHighlightedRows = () => {
@@ -328,12 +336,13 @@ export class ManagedTable extends React.Component<
 
   onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const {highlightedRows} = this.state;
+    const {platform} = getRenderHostInstance().serverConfig.environmentInfo.os;
     if (highlightedRows.size === 0) {
       return;
     }
     if (
-      ((e.metaKey && process.platform === 'darwin') ||
-        (e.ctrlKey && process.platform !== 'darwin')) &&
+      ((e.metaKey && platform === 'darwin') ||
+        (e.ctrlKey && platform !== 'darwin')) &&
       e.keyCode === 67
     ) {
       e.stopPropagation();
@@ -421,6 +430,7 @@ export class ManagedTable extends React.Component<
     if (!this.props.highlightableRows) {
       return;
     }
+    const {platform} = getRenderHostInstance().serverConfig.environmentInfo.os;
 
     if (e.shiftKey) {
       // prevents text selection
@@ -430,8 +440,7 @@ export class ManagedTable extends React.Component<
     let {highlightedRows} = this.state;
 
     const contextClick =
-      e.button !== 0 ||
-      (process.platform === 'darwin' && e.button === 0 && e.ctrlKey);
+      e.button !== 0 || (platform === 'darwin' && e.button === 0 && e.ctrlKey);
 
     if (contextClick) {
       if (!highlightedRows.has(row.key)) {
@@ -445,8 +454,8 @@ export class ManagedTable extends React.Component<
     document.addEventListener('mouseup', this.onStopDragSelecting);
 
     if (
-      ((process.platform === 'darwin' && e.metaKey) ||
-        (process.platform !== 'darwin' && e.ctrlKey)) &&
+      ((platform === 'darwin' && e.metaKey) ||
+        (platform !== 'darwin' && e.ctrlKey)) &&
       this.props.multiHighlight
     ) {
       highlightedRows.add(row.key);
@@ -674,7 +683,7 @@ export class ManagedTable extends React.Component<
       for (let index = 0; index < columnOrder.length; index++) {
         const col = columnOrder[index];
 
-        if (!col.visible) {
+        if (!col.visible || !columns[col.key]) {
           continue;
         }
 
@@ -706,7 +715,8 @@ export class ManagedTable extends React.Component<
             horizontallyScrollable={horizontallyScrollable}
           />
         )}
-        <Container>
+        <Container
+          style={{overflow: this.props.autoHeight ? 'visible' : 'hidden'}}>
           {this.props.autoHeight ? (
             <ContextMenu
               buildItems={

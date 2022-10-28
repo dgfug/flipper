@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -20,7 +20,6 @@ import {
   DataTableColumn,
   Toolbar,
 } from 'flipper-plugin';
-import adb from 'adbkit';
 import TemperatureTable from './TemperatureTable';
 import {Button, Typography, Switch} from 'antd';
 import {PlayCircleOutlined, PauseCircleOutlined} from '@ant-design/icons';
@@ -88,23 +87,25 @@ export function devicePlugin(client: PluginClient<{}, {}>) {
     displayCPUDetail: true,
   });
 
-  const updateCoreFrequency: (core: number, type: string) => Promise<void> =
-    async (core: number, type: string) => {
-      const output = await executeShell(
-        'cat /sys/devices/system/cpu/cpu' + core + '/cpufreq/' + type,
-      );
-      cpuState.update((draft) => {
-        const newFreq = isNormalInteger(output) ? parseInt(output, 10) : -1;
-        // update table only if frequency changed
-        if (draft.cpuFreq[core][type] != newFreq) {
-          draft.cpuFreq[core][type] = newFreq;
-          if (type == 'scaling_cur_freq' && draft.cpuFreq[core][type] < 0) {
-            // cannot find current freq means offline
-            draft.cpuFreq[core][type] = -2;
-          }
+  const updateCoreFrequency: (
+    core: number,
+    type: string,
+  ) => Promise<void> = async (core: number, type: string) => {
+    const output = await executeShell(
+      'cat /sys/devices/system/cpu/cpu' + core + '/cpufreq/' + type,
+    );
+    cpuState.update((draft) => {
+      const newFreq = isNormalInteger(output) ? parseInt(output, 10) : -1;
+      // update table only if frequency changed
+      if (draft.cpuFreq[core][type] != newFreq) {
+        draft.cpuFreq[core][type] = newFreq;
+        if (type == 'scaling_cur_freq' && draft.cpuFreq[core][type] < 0) {
+          // cannot find current freq means offline
+          draft.cpuFreq[core][type] = -2;
         }
-      });
-    };
+      }
+    });
+  };
 
   const updateAvailableFrequencies: (core: number) => Promise<void> = async (
     core: number,

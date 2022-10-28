@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,6 +12,7 @@ import static androidx.core.view.ViewGroupCompat.LAYOUT_MODE_OPTICAL_BOUNDS;
 import static com.facebook.flipper.plugins.inspector.InspectorValue.Type.Boolean;
 import static com.facebook.flipper.plugins.inspector.InspectorValue.Type.Enum;
 
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
@@ -258,6 +259,12 @@ public class ViewGroupDescriptor extends NodeDescriptor<ViewGroup> {
       throws Exception {
     final NodeDescriptor descriptor = descriptorForClass(View.class);
     descriptor.setHighlighted(node, selected, isAlignmentMode);
+  }
+
+  @Override
+  public Bitmap getSnapshot(ViewGroup node, boolean includeChildren) throws Exception {
+    final NodeDescriptor descriptor = descriptorForClass(View.class);
+    return descriptor.getSnapshot(node, true);
   }
 
   private void runHitTest(ViewGroup node, Touch touch) {

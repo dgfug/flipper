@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,116 +9,60 @@
 
 import React from 'react';
 import {State, Store} from '../reducers/index';
-import {FlipperServer, Logger} from 'flipper-common';
-import {FlipperServerImpl} from 'flipper-server-core';
-import {selectClient} from '../reducers/connections';
+import {
+  FlipperServer,
+  Logger,
+  NoLongerConnectedToClientError,
+  isTest,
+  DeviceDescription,
+  FlipperServerState,
+} from 'flipper-common';
 import Client from '../Client';
 import {notification} from 'antd';
-import BaseDevice from '../devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import {ClientDescription, timeout} from 'flipper-common';
 import {reportPlatformFailures} from 'flipper-common';
 import {sideEffect} from '../utils/sideEffect';
-import {getStaticPath} from '../utils/pathUtils';
-import constants from '../fb-stubs/constants';
-import {getRenderHostInstance} from '../RenderHost';
+import {waitFor} from '../utils/waitFor';
 
-export default async (store: Store, logger: Logger) => {
-  const {enableAndroid, androidHome, idbPath, enableIOS, enablePhysicalIOS} =
-    store.getState().settingsState;
-
-  const server = new FlipperServerImpl(
-    {
-      enableAndroid,
-      androidHome,
-      idbPath,
-      enableIOS,
-      enablePhysicalIOS,
-      staticPath: getStaticPath(),
-      tmpPath: getRenderHostInstance().paths.tempPath,
-      validWebSocketOrigins: constants.VALID_WEB_SOCKET_REQUEST_ORIGIN_PREFIXES,
-    },
-    logger,
-  );
-
-  store.dispatch({
-    type: 'SET_FLIPPER_SERVER',
-    payload: server,
-  });
-
+export function connectFlipperServerToStore(
+  server: FlipperServer,
+  store: Store,
+  logger: Logger,
+) {
   server.on('notification', ({type, title, description}) => {
-    console.warn(`[$type] ${title}: ${description}`);
+    const text = `[${type}] ${title}: ${description}`;
+    console.warn(text);
     notification.open({
       message: title,
       description: description,
       type: type,
       duration: 0,
+      key: text,
     });
   });
 
+  server.on('server-state', handleServerStateChange);
+
   server.on('server-error', (err) => {
-    notification.error({
-      message: 'Failed to start connection server',
-      description:
-        err.code === 'EADDRINUSE' ? (
-          <>
-            Couldn't start connection server. Looks like you have multiple
-            copies of Flipper running or another process is using the same
-            port(s). As a result devices will not be able to connect to Flipper.
-            <br />
-            <br />
-            Please try to kill the offending process by running{' '}
-            <code>kill $(lsof -ti:PORTNUMBER)</code> and restart flipper.
-            <br />
-            <br />
-            {'' + err}
-          </>
-        ) : (
-          <>Failed to start Flipper server: ${err.message}</>
-        ),
-      duration: null,
-    });
+    if (err.code === 'EADDRINUSE') {
+      handeEADDRINUSE('' + err);
+    } else {
+      notification.error({
+        message: 'Connection error',
+        description: <>{err.message ?? err}</>,
+        duration: null,
+      });
+    }
   });
 
   server.on('device-connected', (deviceInfo) => {
-    logger.track('usage', 'register-device', {
-      os: deviceInfo.os,
-      name: deviceInfo.title,
-      serial: deviceInfo.serial,
-    });
-
-    const existing = store
-      .getState()
-      .connections.devices.find(
-        (device) => device.serial === deviceInfo.serial,
-      );
-    // handled outside reducer, as it might emit new redux actions...
-    if (existing) {
-      if (existing.connected.get()) {
-        console.warn(
-          `Tried to replace still connected device '${existing.serial}' with a new instance.`,
-        );
-      }
-      existing.destroy();
-    }
-
-    const device = new BaseDevice(server, deviceInfo);
-    device.loadDevicePlugins(
-      store.getState().plugins.devicePlugins,
-      store.getState().connections.enabledDevicePlugins,
-    );
-
-    store.dispatch({
-      type: 'REGISTER_DEVICE',
-      payload: device,
-    });
+    handleDeviceConnected(server, store, logger, deviceInfo);
   });
 
-  server.on('device-disconnected', (device) => {
-    logger.track('usage', 'unregister-device', {
-      os: device.os,
-      serial: device.serial,
-    });
+  server.on('device-disconnected', (deviceInfo) => {
     // N.B.: note that we don't remove the device, we keep it in offline
+    handleDeviceDisconnected(store, logger, deviceInfo);
   });
 
   server.on('client-setup', (client) => {
@@ -148,35 +92,194 @@ export default async (store: Store, logger: Logger) => {
     });
   }
 
+  let sideEffectDisposer: undefined | (() => void);
+
+  if (!isTest()) {
+    sideEffectDisposer = startSideEffects(store, server);
+  }
+  console.log(
+    'Flipper server started and accepting device / client connections',
+  );
+
   server
-    .start()
-    .then(() => {
-      console.log(
-        'Flipper server started and accepting device / client connections',
-      );
+    .exec('get-server-state')
+    .then(handleServerStateChange)
+    .catch((e) => {
+      console.error(`Failed to get initial server state`, e);
+    });
+
+  // this flow is spawned delibarately from this main flow
+  waitFor(store, (state) => state.plugins.initialized)
+    .then(() => server.exec('device-list'))
+    .then((devices) => {
+      // register all devices
+      devices.forEach((device) => {
+        handleDeviceConnected(server, store, logger, device);
+      });
+    })
+    .then(() => server.exec('client-list'))
+    .then((clients) => {
+      clients.forEach((client) => {
+        handleClientConnected(server, store, logger, client);
+      });
     })
     .catch((e) => {
-      console.error('Failed to start Flipper server', e);
-      notification.error({
-        message: 'Failed to start Flipper server',
-        description: 'error: ' + e,
-      });
+      console.error('Failed to get initial device/client list: ', e);
     });
 
   return () => {
+    sideEffectDisposer?.();
     server.close();
   };
-};
+}
+
+function startSideEffects(store: Store, server: FlipperServer) {
+  const dispose1 = sideEffect(
+    store,
+    {
+      name: 'settingsPersistor',
+      throttleMs: 100,
+    },
+    (state) => state.settingsState,
+    (settings) => {
+      server.exec('persist-settings', settings).catch((e) => {
+        console.error('Failed to persist Flipper settings', e);
+      });
+    },
+  );
+
+  const dispose2 = sideEffect(
+    store,
+    {
+      name: 'launcherSettingsPersistor',
+      throttleMs: 100,
+    },
+    (state) => state.launcherSettingsState,
+    (settings) => {
+      server.exec('persist-launcher-settings', settings).catch((e) => {
+        console.error('Failed to persist launcher settings', e);
+      });
+    },
+  );
+
+  return () => {
+    dispose1();
+    dispose2();
+  };
+}
+
+function handleServerStateChange({
+  state,
+  error,
+}: {
+  state: FlipperServerState;
+  error?: string;
+}) {
+  if (state === 'error') {
+    console.warn(`[conn] Flipper server state -> ${state}`, error);
+    if (error?.includes('EADDRINUSE')) {
+      handeEADDRINUSE(error);
+    } else {
+      notification.error({
+        message: 'Failed to start flipper-server',
+        description: '' + error,
+        duration: null,
+      });
+    }
+  } else {
+    console.info(`[conn] Flipper server state -> ${state}`);
+  }
+}
+
+function handeEADDRINUSE(errorMessage: string) {
+  notification.error({
+    message: 'Connection error',
+    description: (
+      <>
+        Couldn't start connection server. Looks like you have multiple copies of
+        Flipper running or another process is using the same port(s). As a
+        result devices will not be able to connect to Flipper.
+        <br />
+        <br />
+        Please try to kill the offending process by running{' '}
+        <code>kill $(lsof -ti:PORTNUMBER)</code> and restart flipper.
+        <br />
+        <br />
+        {errorMessage}
+      </>
+    ),
+    duration: null,
+  });
+}
+
+export function handleDeviceConnected(
+  server: FlipperServer,
+  store: Store,
+  logger: Logger,
+  deviceInfo: DeviceDescription,
+) {
+  logger.track('usage', 'register-device', {
+    os: deviceInfo.os,
+    name: deviceInfo.title,
+    serial: deviceInfo.serial,
+  });
+
+  const existing = store
+    .getState()
+    .connections.devices.find((device) => device.serial === deviceInfo.serial);
+  // handled outside reducer, as it might emit new redux actions...
+  if (existing) {
+    if (existing.connected.get()) {
+      console.warn(
+        `Tried to replace still connected device '${existing.serial}' with a new instance.`,
+      );
+    }
+    if (store.getState().settingsState.persistDeviceData) {
+      //Recycle device
+      existing?.connected.set(true);
+      store.dispatch({
+        type: 'SELECT_DEVICE',
+        payload: existing,
+      });
+      return;
+    }
+    existing.destroy();
+  }
+
+  const device = new BaseDevice(server, deviceInfo);
+  device.loadDevicePlugins(
+    store.getState().plugins.devicePlugins,
+    store.getState().connections.enabledDevicePlugins,
+  );
+  store.dispatch({
+    type: 'REGISTER_DEVICE',
+    payload: device,
+  });
+}
+
+export function handleDeviceDisconnected(
+  store: Store,
+  logger: Logger,
+  deviceInfo: DeviceDescription,
+) {
+  logger.track('usage', 'unregister-device', {
+    os: deviceInfo.os,
+    serial: deviceInfo.serial,
+  });
+  const existing = store
+    .getState()
+    .connections.devices.find((device) => device.serial === deviceInfo.serial);
+  existing?.connected.set(false);
+}
 
 export async function handleClientConnected(
-  server: Pick<FlipperServer, 'exec'>,
+  server: FlipperServer,
   store: Store,
   logger: Logger,
   {id, query}: ClientDescription,
 ) {
   const {connections} = store.getState();
   const existingClient = connections.clients.get(id);
-
   if (existingClient) {
     existingClient.destroy();
     store.dispatch({
@@ -199,7 +302,7 @@ export async function handleClientConnected(
     getDeviceBySerial(store.getState(), query.device_id) ??
     (await findDeviceForConnection(store, query.app, query.device_id).catch(
       (e) => {
-        console.error(
+        console.warn(
           `[conn] Failed to find device '${query.device_id}' while connection app '${query.app}'`,
           e,
         );
@@ -230,6 +333,7 @@ export async function handleClientConnected(
     store,
     undefined,
     device,
+    server,
   );
 
   console.debug(
@@ -243,15 +347,24 @@ export async function handleClientConnected(
     type: 'NEW_CLIENT',
     payload: client,
   });
-
-  store.dispatch(selectClient(client.id));
-
-  await timeout(
-    30 * 1000,
-    client.init(),
-    `[conn] Failed to initialize client ${query.app} on ${query.device_id} in a timely manner`,
-  );
-  console.log(`[conn] ${query.app} on ${query.device_id} connected and ready.`);
+  try {
+    await timeout(
+      30 * 1000,
+      client.init(),
+      `[conn] Failed to initialize client ${query.app} on ${query.device_id} in a timely manner`,
+    );
+    console.log(
+      `[conn] ${query.app} on ${query.device_id} connected and ready.`,
+    );
+  } catch (e) {
+    if (e instanceof NoLongerConnectedToClientError) {
+      console.warn(
+        `[conn] Client ${query.app} on ${query.device_id} disconnected while initialising`,
+      );
+      return;
+    }
+    throw e;
+  }
 }
 
 function getDeviceBySerial(

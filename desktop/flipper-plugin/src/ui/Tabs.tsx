@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -30,7 +30,16 @@ export function Tabs({
       return;
     }
     const tabKey =
-      (typeof child.props.tab === 'string' && child.props.tab) || `tab_${idx}`;
+      (child.props.hasOwnProperty('tabKey') &&
+        typeof child.props.tabKey === 'string' &&
+        child.props.tabKey) ||
+      (child.props.hasOwnProperty('tab') &&
+        typeof child.props.tab === 'string' &&
+        child.props.tab) ||
+      (child.props.hasOwnProperty('key') &&
+        typeof child.props.key === 'string' &&
+        child.props.key) ||
+      `tab_${idx}`;
     keys.push(tabKey);
     return {
       ...child,

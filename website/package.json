@@ -1,27 +1,35 @@
 {
   "scripts": {
     "copy-schema": "fcli ensure static/schemas/plugin-package && fcli copy ../desktop/pkg/schemas/plugin-package-v2.json static/schemas/plugin-package/v2.json -o",
-    "start": "yarn copy-schema && yarn generate-plugin-docs && docusaurus start --port 3001",
-    "build": "yarn copy-schema && yarn generate-plugin-docs && docusaurus build",
+    "start": "yarn copy-schema && yarn generate-plugin-docs && yarn build:style-guide && docusaurus start --port 3001",
+    "build": "yarn copy-schema && yarn generate-plugin-docs && yarn build:style-guide && docusaurus build",
     "publish-gh-pages": "docusaurus deploy",
     "write-translations": "docusaurus write-translations",
     "version": "docusaurus version",
     "rename-version": "docusaurus rename-version",
-    "generate-plugin-docs": "ts-node ./generate-plugin-docs.ts"
+    "generate-plugin-docs": "ts-node ./generate-plugin-docs.ts",
+    "build:style-guide": "fcli remove flipper-themes && fcli copy ../desktop/themes flipper-themes && lessc --js flipper-themes/light.less static/css/style-guide.css"
   },
   "devDependencies": {
-    "@docusaurus/core": "^2.0.0-beta.8",
-    "@docusaurus/plugin-client-redirects": "2.0.0-beta.8",
-    "@docusaurus/preset-classic": "^2.0.0-beta.8",
+    "@ant-design/icons": "^4.7.0",
+    "@docusaurus/core": "2.1.0",
+    "@docusaurus/plugin-client-redirects": "2.1.0",
+    "@docusaurus/preset-classic": "2.1.0",
+    "@emotion/css": "^11.7.1",
+    "@emotion/styled": "^11.6.0",
     "@types/fs-extra": "^9.0.13",
-    "docusaurus-plugin-internaldocs-fb": "^0.9.11",
+    "antd": "^4.23.4",
+    "docusaurus-plugin-internaldocs-fb": "1.1.0",
     "file-cli": "^1.2.0",
+    "flipper-plugin": "^0.131.1",
     "fs-extra": "^10.0.0",
-    "mermaid": "^8.13.3",
+    "less": "^4.1.2",
+    "mermaid": "^8.13.4",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
+    "react-element-to-jsx-string": "^14.3.4",
     "ts-node": "^10.4.0",
-    "typescript": "^4.4.4"
+    "typescript": "^4.5.2"
   },
   "dependencies": {},
   "resolutions": {
@@ -31,7 +39,9 @@
     "browserslist": "^4.16.5",
     "ws": "8.2.0",
     "trim": "1.0.1",
-    "immer": "^9.0.6"
+    "immer": "^9.0.6",
+    "shelljs": "^0.8.5",
+    "ansi-html": "0.0.8"
   },
   "license": "MIT"
 }

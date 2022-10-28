@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,8 @@
  */
 
 import {Alert, ButtonProps, Input, Modal, Radio, Space, Typography} from 'antd';
-import {createState, useValue} from '../state/atom';
+import {createState} from 'flipper-plugin-core';
+import {useValue} from '../state/atom';
 import React from 'react';
 import {renderReactRoot} from '../utils/renderReactRoot';
 import {Layout} from './Layout';

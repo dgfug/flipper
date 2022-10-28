@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,90 +7,156 @@
  * @format
  */
 
-import {parseXcodeFromCoreSimPath} from '../iOSDeviceManager';
-import {getLogger} from 'flipper-common';
-import {IOSBridge} from '../IOSBridge';
-import {FlipperServerImpl} from '../../../FlipperServerImpl';
-import {getFlipperServerConfig} from '../../../FlipperServerConfig';
+import {checkXcodeVersionMismatch, IOSDeviceManager} from '../iOSDeviceManager';
+// eslint-disable-next-line node/no-extraneous-import
+import {getRenderHostInstance} from 'flipper-ui-core';
+import {
+  getFlipperServerConfig,
+  setFlipperServerConfig,
+} from '../../../FlipperServerConfig';
+import {IOSDeviceParams} from 'flipper-common';
 
-const testConfig = getFlipperServerConfig();
+let fakeSimctlBridge: any;
+let fakeIDBBridge: any;
+let fakeFlipperServer: any;
+const fakeDevices: IOSDeviceParams[] = [
+  {
+    udid: 'luke',
+    type: 'emulator',
+    name: 'Luke',
+  },
+  {
+    udid: 'yoda',
+    type: 'emulator',
+    name: 'Yoda',
+  },
+];
+const fakeExistingDevices = [
+  {
+    info: {os: 'iOS'},
+    serial: 'luke',
+  },
+  {
+    info: {os: 'Android'},
+    serial: 'yoda',
+  },
+  {
+    info: {os: 'iOS'},
+    serial: 'plapatine',
+  },
+];
 
-const standardCoresimulatorLog =
-  'username            1264   0.0  0.1  5989740  41648   ??  Ss    2:23PM   0:12.92 /Applications/Xcode_12.4.0_fb.app/Contents/Developer/Platforms/iPhoneOS.platform/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS.simruntime/Contents/Resources/RuntimeRoot/usr/libexec/mobileassetd';
-
-const nonStandardCoresimulatorLog =
-  'username            1264   0.0  0.1  5989740  41648   ??  Ss    2:23PM   0:12.92 /Some/Random/Path/Xcode_12.4.0_fb.app/Contents/Developer/Platforms/iPhoneOS.platform/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS.simruntime/Contents/Resources/RuntimeRoot/usr/libexec/mobileassetd';
-
-const nonStandardSpecialCharacterAphanumericCoresimulatorLog =
-  'username            1264   0.0  0.1  5989740  41648   ??  Ss    2:23PM   0:12.92 /Some_R@d0m/Path-3455355/path(2)+connection/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS.simruntime/Contents/Resources/RuntimeRoot/usr/libexec/mobileassetd';
-
-test('test parseXcodeFromCoreSimPath from non standard locations', () => {
-  const match = parseXcodeFromCoreSimPath(nonStandardCoresimulatorLog);
-  expect(match && match.length > 0).toBeTruthy();
-  expect(
-    // @ts-ignore the null and non zero lenght check for match is already done above
-    match[0],
-  ).toEqual('/Some/Random/Path/Xcode_12.4.0_fb.app/Contents/Developer');
+beforeEach(() => {
+  fakeSimctlBridge = {
+    getActiveDevices: jest.fn().mockImplementation(async () => fakeDevices),
+  };
+  fakeIDBBridge = {
+    getActiveDevices: jest.fn().mockImplementation(async () => fakeDevices),
+  };
+  fakeFlipperServer = {
+    getDevices: jest.fn().mockImplementation(() => fakeExistingDevices),
+    registerDevice: jest.fn(),
+    unregisterDevice: jest.fn(),
+  };
+  setFlipperServerConfig(getRenderHostInstance().serverConfig);
 });
 
-test('test parseXcodeFromCoreSimPath from non standard alphanumeric special character locations', () => {
-  const match = parseXcodeFromCoreSimPath(
-    nonStandardSpecialCharacterAphanumericCoresimulatorLog,
+afterEach(() => {
+  setFlipperServerConfig(undefined);
+});
+
+test('test checkXcodeVersionMismatch with correct Simulator.app', () => {
+  const invalidVersion = checkXcodeVersionMismatch(
+    [
+      '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator',
+    ],
+    '/Applications/Xcode.app/Contents/Developer',
   );
-  expect(match && match.length > 0).toBeTruthy();
-  expect(
-    // @ts-ignore the null and non zero lenght check for match is already done above
-    match[0],
-  ).toEqual(
-    '/Some_R@d0m/Path-3455355/path(2)+connection/Xcode.app/Contents/Developer',
+  expect(invalidVersion).toEqual(undefined);
+});
+
+test('test checkXcodeVersionMismatch with no running Simulator.app', () => {
+  const invalidVersion = checkXcodeVersionMismatch(
+    [],
+    '/Applications/Xcode.app/Contents/Developer',
+  );
+  expect(invalidVersion).toEqual(undefined);
+});
+
+test('test checkXcodeVersionMismatch with an incorrect Simulator.app', () => {
+  const invalidVersion = checkXcodeVersionMismatch(
+    [
+      '/Applications/Xcode_Incorrect.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator',
+    ],
+    '/Applications/Xcode.app/Contents/Developer',
+  );
+  expect(invalidVersion).toContain(
+    '/Applications/Xcode_Incorrect.app/Contents/Developer',
   );
 });
 
-test('test parseXcodeFromCoreSimPath from standard locations', () => {
-  const match = parseXcodeFromCoreSimPath(standardCoresimulatorLog);
-  expect(match && match.length > 0).toBeTruthy();
-  expect(
-    // @ts-ignore the null and non zero lenght check for match is already done above
-    match[0],
-  ).toEqual('/Applications/Xcode_12.4.0_fb.app/Contents/Developer');
+test('test checkXcodeVersionMismatch with no sims running and no xcode-select', () => {
+  const invalidVersion = checkXcodeVersionMismatch(
+    [],
+    '/Library/Developer/CommandLineTools',
+  );
+  expect(invalidVersion).toEqual(undefined);
 });
 
-test('test getAllPromisesForQueryingDevices when xcode detected', () => {
-  const flipperServer = new FlipperServerImpl(testConfig, getLogger());
-  flipperServer.ios.iosBridge = {} as IOSBridge;
-  const promises = flipperServer.ios.getAllPromisesForQueryingDevices(
-    true,
-    false,
+test('test checkXcodeVersionMismatch with no sims running and no xcode-select', () => {
+  const invalidVersion = checkXcodeVersionMismatch(
+    [
+      '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator',
+    ],
+    '/Library/Developer/CommandLineTools',
   );
-  expect(promises.length).toEqual(2);
+  expect(invalidVersion).toContain(
+    'A Simulator is running and "xcode-select" has not been used',
+  );
 });
 
-test('test getAllPromisesForQueryingDevices when xcode is not detected', () => {
-  const flipperServer = new FlipperServerImpl(testConfig, getLogger());
-  flipperServer.ios.iosBridge = {} as IOSBridge;
-  const promises = flipperServer.ios.getAllPromisesForQueryingDevices(
-    false,
-    true,
+test('test queryDevices when simctl used', async () => {
+  const ios = new IOSDeviceManager(
+    fakeFlipperServer,
+    getFlipperServerConfig().settings,
   );
-  expect(promises.length).toEqual(1);
+  ios.simctlBridge = fakeSimctlBridge;
+
+  await ios.queryDevices(fakeSimctlBridge);
+
+  expect(fakeSimctlBridge.getActiveDevices).toBeCalledTimes(1);
+  expect(fakeIDBBridge.getActiveDevices).toBeCalledTimes(0);
+
+  expect(fakeFlipperServer.registerDevice).toBeCalledTimes(1);
+  expect(fakeFlipperServer.registerDevice).toBeCalledWith(
+    expect.objectContaining({
+      serial: 'yoda',
+    }),
+  );
+
+  expect(fakeFlipperServer.unregisterDevice).toBeCalledTimes(1);
+  expect(fakeFlipperServer.unregisterDevice).toBeCalledWith('plapatine');
 });
 
-test('test getAllPromisesForQueryingDevices when xcode and idb are both unavailable', () => {
-  const flipperServer = new FlipperServerImpl(testConfig, getLogger());
-  flipperServer.ios.iosBridge = {} as IOSBridge;
-  const promises = flipperServer.ios.getAllPromisesForQueryingDevices(
-    false,
-    false,
+test('test queryDevices when idb used', async () => {
+  const ios = new IOSDeviceManager(
+    fakeFlipperServer,
+    getFlipperServerConfig().settings,
   );
-  expect(promises.length).toEqual(0);
-});
+  ios.simctlBridge = fakeSimctlBridge;
 
-test('test getAllPromisesForQueryingDevices when both idb and xcode are available', () => {
-  const flipperServer = new FlipperServerImpl(testConfig, getLogger());
-  flipperServer.ios.iosBridge = {} as IOSBridge;
-  const promises = flipperServer.ios.getAllPromisesForQueryingDevices(
-    true,
-    true,
+  await ios.queryDevices(fakeIDBBridge);
+
+  expect(fakeSimctlBridge.getActiveDevices).toBeCalledTimes(0);
+  expect(fakeIDBBridge.getActiveDevices).toBeCalledTimes(1);
+
+  expect(fakeFlipperServer.registerDevice).toBeCalledTimes(1);
+  expect(fakeFlipperServer.registerDevice).toBeCalledWith(
+    expect.objectContaining({
+      serial: 'yoda',
+    }),
   );
-  expect(promises.length).toEqual(2);
+
+  expect(fakeFlipperServer.unregisterDevice).toBeCalledTimes(1);
+  expect(fakeFlipperServer.unregisterDevice).toBeCalledWith('plapatine');
 });

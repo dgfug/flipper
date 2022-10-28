@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 import React from 'react';
 import {Component} from 'react';
-import querystring from 'querystring';
 import xmlBeautifier from 'xml-beautifier';
 import {Base64} from 'js-base64';
 
@@ -23,7 +22,13 @@ import {
 } from 'flipper-plugin';
 import {Select, Typography} from 'antd';
 
-import {bodyAsBinary, bodyAsString, formatBytes, getHeaderValue} from './utils';
+import {
+  bodyAsBinary,
+  bodyAsString,
+  formatBytes,
+  getHeaderValue,
+  queryToObj,
+} from './utils';
 import {Request, Header, Insights, RetryInsights} from './types';
 import {BodyOptions} from './index';
 import {ProtobufDefinitionsRepository} from './ProtobufDefinitionsRepository';
@@ -470,7 +475,11 @@ class XMLTextFormatter {
   }
 
   format(body: string, contentType: string) {
-    if (contentType.startsWith('text/html')) {
+    if (
+      contentType.startsWith('text/html') ||
+      contentType.startsWith('text/xml') ||
+      contentType.startsWith('application/xml')
+    ) {
       return <XMLText body={body} />;
     }
   }
@@ -519,7 +528,7 @@ class JSONFormatter {
 class LogEventFormatter {
   formatRequest(request: Request) {
     if (request.url.indexOf('logging_client_event') > 0) {
-      const data = querystring.parse(bodyAsString(request.requestData));
+      const data = queryToObj(bodyAsString(request.requestData));
       if (typeof data.message === 'string') {
         data.message = JSON.parse(data.message);
       }
@@ -531,7 +540,7 @@ class LogEventFormatter {
 class GraphQLBatchFormatter {
   formatRequest(request: Request) {
     if (request.url.indexOf('graphqlbatch') > 0) {
-      const data = querystring.parse(bodyAsString(request.requestData));
+      const data = queryToObj(bodyAsString(request.requestData));
       if (typeof data.queries === 'string') {
         data.queries = JSON.parse(data.queries);
       }
@@ -571,7 +580,7 @@ class GraphQLFormatter {
       if (!decoded) {
         return undefined;
       }
-      const data = querystring.parse(bodyAsString(decoded));
+      const data = queryToObj(bodyAsString(decoded));
       if (typeof data.variables === 'string') {
         data.variables = JSON.parse(data.variables);
       }
@@ -632,10 +641,7 @@ class FormUrlencodedFormatter {
         return undefined;
       }
       return (
-        <DataInspector
-          expandRoot
-          data={querystring.parse(bodyAsString(decoded))}
-        />
+        <DataInspector expandRoot data={queryToObj(bodyAsString(decoded))} />
       );
     }
   };

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,12 +7,12 @@
  * @format
  */
 
-jest.useFakeTimers();
+// jest.useFakeTimers();
 
 import React from 'react';
 import produce from 'immer';
 import {FlipperPlugin} from '../plugin';
-import {renderMockFlipperWithPlugin} from '../test-utils/createMockFlipperWithPlugin';
+import {renderMockFlipperWithPlugin} from './test-utils/createMockFlipperWithPlugin';
 import {
   _SandyPluginDefinition,
   PluginClient,
@@ -22,14 +22,16 @@ import {
   DevicePluginClient,
   DeviceLogEntry,
   useValue,
+  sleep,
 } from 'flipper-plugin';
 import {selectPlugin} from '../reducers/connections';
 import {updateSettings} from '../reducers/settings';
 import {switchPlugin} from '../reducers/pluginManager';
+import {awaitPluginCommandQueueEmpty} from '../dispatcher/pluginManager';
 
-interface PersistedState {
+type PersistedState = {
   count: 1;
-}
+};
 
 class TestPlugin extends FlipperPlugin<any, any, any> {
   static id = 'TestPlugin';
@@ -57,7 +59,7 @@ class TestPlugin extends FlipperPlugin<any, any, any> {
   render() {
     return (
       <h1>
-        Hello:{' '}
+        <span>Hello</span>
         <span data-testid="counter">{this.props.persistedState.count}</span>
       </h1>
     );
@@ -72,18 +74,19 @@ test('Plugin container can render plugin and receive updates', async () => {
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <h1>
-                Hello:
-                 
+                <span>
+                  Hello
+                </span>
                 <span
                   data-testid="counter"
                 >
@@ -108,7 +111,8 @@ test('Plugin container can render plugin and receive updates', async () => {
   expect((await renderer.findByTestId('counter')).textContent).toBe('2');
 });
 
-test('PluginContainer can render Sandy plugins', async () => {
+// TODO(T119353406): Disabled due to flakiness.
+test.skip('PluginContainer can render Sandy plugins', async () => {
   let renders = 0;
 
   function MySandyPlugin() {
@@ -167,17 +171,19 @@ test('PluginContainer can render Sandy plugins', async () => {
   const {renderer, act, sendMessage, client, store} =
     await renderMockFlipperWithPlugin(definition);
 
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
 
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
@@ -213,11 +219,11 @@ test('PluginContainer can render Sandy plugins', async () => {
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
@@ -256,7 +262,9 @@ test('PluginContainer can render Sandy plugins', async () => {
     );
   });
 
-  expect(client.rawSend).toBeCalledWith('deinit', {plugin: 'TestPlugin'});
+  expect((client as any).rawSend).toBeCalledWith('deinit', {
+    plugin: 'TestPlugin',
+  });
 
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
@@ -293,11 +301,11 @@ test('PluginContainer can render Sandy plugins', async () => {
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
@@ -322,7 +330,9 @@ test('PluginContainer can render Sandy plugins', async () => {
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(1);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
 
   // disable
   act(() => {
@@ -337,7 +347,9 @@ test('PluginContainer can render Sandy plugins', async () => {
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(2);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
-  expect(client.rawSend).toBeCalledWith('deinit', {plugin: 'TestPlugin'});
+  expect((client as any).rawSend).toBeCalledWith('deinit', {
+    plugin: 'TestPlugin',
+  });
 
   // re-enable
   act(() => {
@@ -348,19 +360,23 @@ test('PluginContainer can render Sandy plugins', async () => {
       }),
     );
   });
+
   // note: this is the old pluginInstance, so that one is not reconnected!
   expect(pluginInstance.connectedStub).toBeCalledTimes(2);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(2);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
 
-  expect(
-    client.sandyPluginStates.get('TestPlugin')!.instanceApi.connectedStub,
-  ).toBeCalledTimes(1);
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
-  expect(
-    client.sandyPluginStates.get('TestPlugin')!.instanceApi.count.get(),
-  ).toBe(0);
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10);
+  const newPluginInstance =
+    client.sandyPluginStates.get('TestPlugin')!.instanceApi;
+  expect(newPluginInstance).not.toBe(pluginInstance);
+  expect(newPluginInstance.connectedStub).toBeCalledTimes(1);
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
+  expect(newPluginInstance.count.get()).toBe(0);
 });
 
 test('PluginContainer triggers correct lifecycles for background plugin', async () => {
@@ -395,8 +411,10 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
     },
   });
 
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
+  ((client as any).rawSend as jest.Mock).mockClear();
   // make sure the plugin gets connected
   const pluginInstance: ReturnType<typeof plugin> =
     client.sandyPluginStates.get(definition.id)!.instanceApi;
@@ -417,8 +435,8 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
     );
   });
   // bg plugin!
-  expect(client.rawSend).not.toBeCalled();
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).not.toBeCalled();
+  ((client as any).rawSend as jest.Mock).mockClear();
   expect(pluginInstance.connectedStub).toBeCalledTimes(1);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
@@ -439,8 +457,8 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
-  expect(client.rawSend).not.toBeCalled();
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).not.toBeCalled();
+  ((client as any).rawSend as jest.Mock).mockClear();
 
   // disable
   act(() => {
@@ -455,8 +473,10 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(1);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
-  expect(client.rawSend).toBeCalledWith('deinit', {plugin: 'TestPlugin'});
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).toBeCalledWith('deinit', {
+    plugin: 'TestPlugin',
+  });
+  ((client as any).rawSend as jest.Mock).mockClear();
 
   // select something else
   act(() => {
@@ -478,6 +498,9 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
       }),
     );
   });
+
+  await awaitPluginCommandQueueEmpty(store);
+
   // note: this is the old pluginInstance, so that one is not reconnected!
   expect(pluginInstance.connectedStub).toBeCalledTimes(1);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(1);
@@ -490,8 +513,10 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(newPluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(newPluginInstance.activatedStub).toBeCalledTimes(0);
   expect(newPluginInstance.deactivatedStub).toBeCalledTimes(0);
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
+  ((client as any).rawSend as jest.Mock).mockClear();
 
   // select new plugin
   act(() => {
@@ -508,8 +533,8 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(newPluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(newPluginInstance.activatedStub).toBeCalledTimes(1);
   expect(newPluginInstance.deactivatedStub).toBeCalledTimes(0);
-  expect(client.rawSend).not.toBeCalled();
-  (client.rawSend as jest.Mock).mockClear();
+  expect((client as any).rawSend).not.toBeCalled();
+  ((client as any).rawSend as jest.Mock).mockClear();
 });
 
 test('PluginContainer + Sandy plugin supports deeplink', async () => {
@@ -533,7 +558,12 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       Component() {
         const instance = usePlugin(plugin);
         const linkState = useValue(instance.linkState);
-        return <h1>hello {linkState || 'world'}</h1>;
+        return (
+          <h1>
+            <span>hello</span>
+            <span>{linkState || 'world'}</span>
+          </h1>
+        );
       },
     },
   );
@@ -541,25 +571,31 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
     definition,
   );
 
-  expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
+  expect((client as any).rawSend).toBeCalledWith('init', {
+    plugin: 'TestPlugin',
+  });
 
   expect(linksSeen).toEqual([]);
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <h1>
-                hello 
-                world
+                <span>
+                  hello
+                </span>
+                <span>
+                  world
+                </span>
               </h1>
             </div>
             <div
@@ -582,24 +618,28 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
     );
   });
 
-  jest.runAllTimers();
+  await sleep(100);
   expect(linksSeen).toEqual(['universe!']);
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <h1>
-                hello 
-                universe!
+                <span>
+                  hello
+                </span>
+                <span>
+                  universe!
+                </span>
               </h1>
             </div>
             <div
@@ -622,7 +662,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
   expect(linksSeen).toEqual(['universe!']);
 
   // ...nor does a random other store update that does trigger a plugin container render
@@ -645,7 +685,8 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!', 'london!']);
 
   // and same link does trigger if something else was selected in the mean time
@@ -667,7 +708,8 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!', 'london!', 'london!']);
 });
 
@@ -689,7 +731,12 @@ test('PluginContainer can render Sandy device plugins', async () => {
       });
     }).toThrowError(/didn't match the type of the requested plugin/);
     const lastLogMessage = useValue(sandyApi.lastLogMessage);
-    return <div>Hello from Sandy: {lastLogMessage?.message}</div>;
+    return (
+      <div>
+        <span>Hello from Sandy:</span>
+        <span>{lastLogMessage?.message}</span>
+      </div>
+    );
   }
 
   const devicePlugin = (client: DevicePluginClient) => {
@@ -720,17 +767,20 @@ test('PluginContainer can render Sandy device plugins', async () => {
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <div>
-                Hello from Sandy: 
+                <span>
+                  Hello from Sandy:
+                </span>
+                <span />
               </div>
             </div>
             <div
@@ -754,24 +804,30 @@ test('PluginContainer can render Sandy device plugins', async () => {
       tag: 'test',
     });
   });
+  await sleep(10); // links are handled async
+
   expect(renders).toBe(2);
 
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <div>
-                Hello from Sandy: 
-                helleuh
+                <span>
+                  Hello from Sandy:
+                </span>
+                <span>
+                  helleuh
+                </span>
               </div>
             </div>
             <div
@@ -847,7 +903,12 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       Component() {
         const instance = usePlugin(devicePlugin);
         const linkState = useValue(instance.linkState);
-        return <h1>hello {linkState || 'world'}</h1>;
+        return (
+          <h1>
+            <span>hello</span>
+            <span>{linkState || 'world'}</span>
+          </h1>
+        );
       },
     },
   );
@@ -867,18 +928,22 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <h1>
-                hello 
-                world
+                <span>
+                  hello
+                </span>
+                <span>
+                  world
+                </span>
               </h1>
             </div>
             <div
@@ -902,24 +967,29 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
     );
   });
 
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10); // links are handled async
   expect(linksSeen).toEqual([theUniverse]);
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <h1>
-                hello 
-                {"thisIs":"theUniverse"}
+                <span>
+                  hello
+                </span>
+                <span>
+                  {"thisIs":"theUniverse"}
+                </span>
               </h1>
             </div>
             <div
@@ -943,7 +1013,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
   expect(linksSeen).toEqual([theUniverse]);
 
   // ...nor does a random other store update that does trigger a plugin container render
@@ -967,7 +1037,8 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse, 'london!']);
 
   // and same link does trigger if something else was selected in the mean time
@@ -991,7 +1062,8 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse, 'london!', 'london!']);
 });
 
@@ -1087,12 +1159,13 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
   pluginInstance.selectPlugin(definition.id, 'data');
   expect(store.getState().connections.selectedPlugin).toBe(definition.id);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
-  jest.runAllTimers();
+  await awaitPluginCommandQueueEmpty(store);
   expect(renderer.baseElement.querySelector('h1')).toMatchInlineSnapshot(`
     <h1>
       Plugin1
     </h1>
   `);
+  await sleep(10); // links are handled async
   expect(linksSeen).toEqual(['data']);
 
   // try to plugin 2 - it should be possible to select it even if it is not enabled
@@ -1137,7 +1210,12 @@ test('PluginContainer can render Sandy plugins for archived devices', async () =
         return {};
       });
     }).toThrowError(/didn't match the type of the requested plugin/);
-    return <div>Hello from Sandy{count}</div>;
+    return (
+      <div>
+        <span>Hello from Sandy</span>
+        <span>{count}</span>
+      </div>
+    );
   }
 
   type Events = {
@@ -1182,24 +1260,28 @@ test('PluginContainer can render Sandy plugins for archived devices', async () =
     {archivedDevice: true},
   );
 
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
 
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <div>
-                Hello from Sandy
-                0
+                <span>
+                  Hello from Sandy
+                </span>
+                <span>
+                  0
+                </span>
               </div>
             </div>
             <div
@@ -1232,7 +1314,7 @@ test('PluginContainer can render Sandy plugins for archived devices', async () =
     );
   });
 
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
 
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
@@ -1262,18 +1344,22 @@ test('PluginContainer can render Sandy plugins for archived devices', async () =
     <body>
       <div>
         <div
-          class="css-1x2cmzz-SandySplitContainer e1hsqii10"
+          class="css-1x2cmzz-SandySplitContainer e148ues30"
         >
           <div />
           <div
-            class="css-1knrt0j-SandySplitContainer e1hsqii10"
+            class="css-1knrt0j-SandySplitContainer e148ues30"
           >
             <div
               class="css-1woty6b-Container"
             >
               <div>
-                Hello from Sandy
-                0
+                <span>
+                  Hello from Sandy
+                </span>
+                <span>
+                  0
+                </span>
               </div>
             </div>
             <div
@@ -1291,7 +1377,7 @@ test('PluginContainer can render Sandy plugins for archived devices', async () =
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
 });
 
 test('PluginContainer triggers correct lifecycles for background plugin', async () => {
@@ -1329,7 +1415,7 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
     },
   });
 
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
   // make sure the plugin gets connected
   const pluginInstance: ReturnType<typeof plugin> =
     client.sandyPluginStates.get(definition.id)!.instanceApi;
@@ -1350,7 +1436,7 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
     );
   });
   // bg plugin!
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
   expect(pluginInstance.connectedStub).toBeCalledTimes(0);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
@@ -1371,7 +1457,7 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
 
   // select something else
   act(() => {
@@ -1398,5 +1484,5 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(3);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
-  expect(client.rawSend).not.toBeCalled();
+  expect((client as any).rawSend).not.toBeCalled();
 });

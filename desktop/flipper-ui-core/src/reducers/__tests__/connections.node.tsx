@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,21 +13,23 @@ import {
   _SandyPluginDefinition,
   _setFlipperLibImplementation,
   TestUtils,
-  MockedConsole,
 } from 'flipper-plugin';
-import {TestDevice} from '../../test-utils/TestDevice';
 import {
   createMockFlipperWithPlugin,
   MockFlipperResult,
-} from '../../test-utils/createMockFlipperWithPlugin';
+} from '../../__tests__/test-utils/createMockFlipperWithPlugin';
 import {Store} from '..';
 import {getActiveClient, getActiveDevice} from '../../selectors/connections';
-import BaseDevice from '../../devices/BaseDevice';
+import {BaseDevice, TestDevice} from 'flipper-frontend-core';
 import Client from '../../Client';
+import {
+  mockConsole,
+  MockedConsole,
+} from '../../__tests__/test-utils/mockConsole';
 
 let mockedConsole: MockedConsole;
 beforeEach(() => {
-  mockedConsole = TestUtils.mockConsole();
+  mockedConsole = mockConsole();
   _setFlipperLibImplementation(TestUtils.createMockFlipperLib());
 });
 

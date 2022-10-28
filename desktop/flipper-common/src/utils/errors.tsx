@@ -1,11 +1,13 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
  * @format
  */
+
+import {ClientErrorType} from '../server-types';
 
 export function isAuthError(
   err: any,
@@ -21,8 +23,37 @@ export function isConnectivityOrAuthError(
   return (
     err instanceof ConnectivityError ||
     isAuthError(err) ||
-    String(err).startsWith('Failed to fetch')
+    String(err).startsWith('Failed to fetch') ||
+    // In cases where the error message is wrapped but the
+    // underlying core issue is still a fetch failure.
+    String(err).endsWith('Failed to fetch')
   );
+}
+
+export class SystemError extends Error {
+  name = 'SystemError';
+  readonly context?: unknown;
+  constructor(msg: string, ...args: unknown[]) {
+    super(msg);
+    this.context = args;
+  }
+}
+
+export class UserError extends Error {
+  name = 'UserError';
+  readonly context?: unknown;
+  constructor(msg: string, ...args: unknown[]) {
+    super(msg);
+    this.context = args;
+  }
+}
+
+export class UnableToExtractClientQueryError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = 'UnableToExtractClientQueryError';
+  }
+  name: 'UnableToExtractClientQueryError';
 }
 
 export class CancelledPromiseError extends Error {
@@ -55,6 +86,14 @@ export class UserNotSignedInError extends Error {
     this.name = 'UserNotSignedInError';
   }
   name: 'UserNotSignedInError';
+}
+
+export class NoLongerConnectedToClientError extends Error {
+  constructor(msg: string = 'No longer connected to client.') {
+    super(msg);
+    this.name = 'NoLongerConnectedToClientError';
+  }
+  name: 'NoLongerConnectedToClientError';
 }
 
 declare global {
@@ -103,3 +142,10 @@ export function getStringFromErrorLike(e: any): string {
     }
   }
 }
+
+export const deserializeRemoteError = (serializedError: ClientErrorType) => {
+  const err = new Error(serializedError.message);
+  err.name = serializedError.name;
+  err.stack += `. Caused by: ${serializedError.stacktrace}`;
+  return err;
+};

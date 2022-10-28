@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,7 @@
 
 import {FlipperPlugin, FlipperDevicePlugin} from './plugin';
 import {Logger, isTest} from 'flipper-common';
-import BaseDevice from './devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import {pluginKey as getPluginKey} from './utils/pluginKey';
 import Client from './Client';
 import {
@@ -41,11 +41,10 @@ import {
 } from './utils/pluginUtils';
 import {ContentContainer} from './sandy-chrome/ContentContainer';
 import {Alert, Typography} from 'antd';
-import {InstalledPluginDetails} from 'flipper-plugin-lib';
 import semver from 'semver';
 import {loadPlugin} from './reducers/pluginManager';
 import {produce} from 'immer';
-import {reportUsage} from 'flipper-common';
+import {reportUsage, InstalledPluginDetails} from 'flipper-common';
 import {PluginInfo} from './chrome/fb-stubs/PluginInfo';
 import {getActiveClient, getActivePlugin} from './selectors/connections';
 import {AnyAction} from 'redux';
@@ -243,6 +242,10 @@ class PluginContainer extends PureComponent<Props, State> {
   }
 
   renderPluginInfo() {
+    if (isTest()) {
+      // Plugin info uses Antd animations, generating a gazillion warnings
+      return 'Stubbed plugin info';
+    }
     return <PluginInfo />;
   }
 

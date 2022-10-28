@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -31,7 +31,9 @@ function createDevToolsNode(
   wrapper.style.height = '100%';
   wrapper.style.width = '100%';
 
-  const iframe = document.createElement('webview');
+  const iframe = document.createElement(
+    'webview',
+  ) as unknown as HTMLIFrameElement;
   iframe.style.height = '100%';
   iframe.style.width = '100%';
 

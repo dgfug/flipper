@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,11 +15,12 @@ import {
 import {Button, Typography} from 'antd';
 import {isPlainObject, pad} from 'lodash';
 import React, {createElement, Fragment, isValidElement, useState} from 'react';
-import {tryGetFlipperLibImplementation} from '../plugin/FlipperLib';
-import {safeStringify} from '../utils/safeStringify';
+import {_tryGetFlipperLibImplementation} from 'flipper-plugin-core';
+import {safeStringify} from 'flipper-plugin-core';
 import {urlRegex} from '../utils/urlRegex';
 import {useTableRedraw} from '../data-source/index';
 import {theme} from './theme';
+import {HighlightManager} from './Highlight';
 
 /**
  * A Formatter is used to render an arbitrarily value to React. If a formatter returns 'undefined'
@@ -27,48 +28,65 @@ import {theme} from './theme';
  *
  * In case further processing by the default formatter is to be avoided, make sure a string is returned from any custom formatter.
  */
-export type Formatter = (value: any) => string | React.ReactElement | any;
+export type Formatter = (
+  value: any,
+  highlighter?: HighlightManager,
+) => string | React.ReactElement | any;
 
 export const DataFormatter = {
-  defaultFormatter(value: any) {
+  defaultFormatter(value: any, highlighter?: HighlightManager) {
     if (isValidElement(value)) {
       return value;
     }
+    let res = '';
     switch (typeof value) {
       case 'boolean':
-        return value ? 'true' : 'false';
+        res = value ? 'true' : 'false';
+        break;
       case 'number':
-        return '' + value;
+        res = '' + value;
+        break;
       case 'undefined':
-        return '';
+        break;
       case 'string':
-        return value;
+        res = value;
+        break;
       case 'object': {
-        if (value === null) return '';
+        if (value === null) break;
         if (value instanceof Date) {
-          return (
+          res =
             value.toTimeString().split(' ')[0] +
             '.' +
-            pad('' + value.getMilliseconds(), 3, '0')
-          );
+            pad('' + value.getMilliseconds(), 3, '0');
+          break;
         }
         if (value instanceof Map) {
-          return safeStringify(Array.from(value.entries()));
+          res = safeStringify(Array.from(value.entries()));
+          break;
         }
         if (value instanceof Set) {
-          return safeStringify(Array.from(value.values()));
+          res = safeStringify(Array.from(value.values()));
+          break;
         }
-        return safeStringify(value);
+        res = safeStringify(value);
+        break;
       }
       default:
-        return '<unrenderable value>';
+        res = '<unrenderable value>';
     }
+    return highlighter?.render(res) ?? res;
   },
 
   truncate(maxLength: number) {
-    return (value: any) => {
+    return (value: any, highlighter?: HighlightManager) => {
       if (typeof value === 'string' && value.length > maxLength) {
-        return <TruncateHelper value={value} maxLength={maxLength} />;
+        return (
+          <TruncateHelper
+            value={value}
+            maxLength={maxLength}
+            textWrapper={highlighter}
+          />
+        );
       }
       return value;
     };
@@ -131,16 +149,20 @@ export const DataFormatter = {
     return value;
   },
 
-  format(value: any, formatters?: Formatter[] | Formatter): any {
+  format(
+    value: any,
+    formatters?: Formatter[] | Formatter,
+    highlighter?: HighlightManager,
+  ): any {
     let res = value;
     if (Array.isArray(formatters)) {
       for (const formatter of formatters) {
-        res = formatter(res);
+        res = formatter(res, highlighter);
       }
     } else if (formatters) {
-      res = formatters(res);
+      res = formatters(res, highlighter);
     }
-    return DataFormatter.defaultFormatter(res);
+    return DataFormatter.defaultFormatter(res, highlighter);
   },
 };
 
@@ -148,16 +170,18 @@ export const DataFormatter = {
 export function TruncateHelper({
   value,
   maxLength,
+  textWrapper,
 }: {
   value: string;
   maxLength: number;
+  textWrapper?: HighlightManager; //Could be a generic type
 }) {
   const [collapsed, setCollapsed] = useState(true);
   const redrawRow = useTableRedraw();
-
+  const message = collapsed ? value.substr(0, maxLength) : value;
   return (
     <>
-      {collapsed ? value.substr(0, maxLength) : value}
+      {textWrapper ? textWrapper.render(message) : message}
       <Button
         onClick={() => {
           setCollapsed((c) => !c);
@@ -172,7 +196,7 @@ export function TruncateHelper({
       <Button
         icon={<CopyOutlined />}
         onClick={() => {
-          tryGetFlipperLibImplementation()?.writeTextToClipboard(value);
+          _tryGetFlipperLibImplementation()?.writeTextToClipboard(value);
         }}
         size="small"
         type="text"

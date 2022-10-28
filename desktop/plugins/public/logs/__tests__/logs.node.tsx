@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -94,6 +94,7 @@ test('it supports deeplink and select nodes + navigating to bottom', async () =>
   sendLogEntry(entry3);
 
   expect(instance.tableManagerRef).not.toBeUndefined();
+  expect(instance.tableManagerRef.current).not.toBeNull();
   expect(instance.tableManagerRef.current?.getSelectedItems()).toEqual([]);
 
   act(() => {

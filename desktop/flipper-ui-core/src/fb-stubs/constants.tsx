@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,25 +8,13 @@
  */
 
 import {DeviceOS} from 'flipper-plugin';
+import {frontendCoreConstants} from 'flipper-frontend-core';
 
 export default Object.freeze({
-  GRAPH_APP_ID: '',
-  GRAPH_CLIENT_TOKEN: '',
-  GRAPH_ACCESS_TOKEN: '',
-
-  // this provides elevated access to scribe. we really shouldn't be exposing this.
-  // need to investigate how to abstract the scribe logging so it's safe.
-  GRAPH_SECRET: '',
-  GRAPH_SECRET_ACCESS_TOKEN: '',
-
-  // Provides access to Insights Validation endpoint on interngraph
-  INSIGHT_INTERN_APP_ID: '',
-  INSIGHT_INTERN_APP_TOKEN: '',
+  ...frontendCoreConstants,
 
   // Enables the flipper data to be exported through shareabale link
   ENABLE_SHAREABLE_LINK: false,
-
-  IS_PUBLIC_BUILD: true,
 
   FEEDBACK_GROUP_LINK: 'https://github.com/facebook/flipper/issues',
 
@@ -43,11 +31,5 @@ export default Object.freeze({
 
   SUPPORT_GROUPS: [],
 
-  // Only WebSocket requests from the following origin prefixes will be accepted
-  VALID_WEB_SOCKET_REQUEST_ORIGIN_PREFIXES: [
-    'chrome-extension://',
-    'localhost:',
-    'http://localhost:',
-    'app://',
-  ],
+  INTERN_URL: '',
 });

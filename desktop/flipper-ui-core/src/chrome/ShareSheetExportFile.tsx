@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,6 @@
 import {FlexColumn, Button, styled, Text, FlexRow, Spacer} from '../ui';
 import React, {Component} from 'react';
 import {reportPlatformFailures} from 'flipper-common';
-import {performance} from 'perf_hooks';
 import {Logger} from 'flipper-common';
 import {IdlerImpl} from '../utils/Idler';
 import {

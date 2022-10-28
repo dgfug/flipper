@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,8 +7,10 @@
  * @format
  */
 
-export default function createPaste(
-  _input: string,
-): Promise<string | undefined> {
-  return Promise.reject(new Error('Not implemented!'));
+import type {CreatePasteArgs, CreatePasteResult} from 'flipper-plugin';
+
+export default async function createPaste(
+  _args: string | CreatePasteArgs,
+): Promise<CreatePasteResult | undefined> {
+  throw new Error('Not implemented');
 }

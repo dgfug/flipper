@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,12 +8,20 @@
  */
 
 import {DeviceDescription, DeviceLogEntry} from 'flipper-common';
+import {DeviceListener, NoopListener} from '../utils/DeviceListener';
 import {FlipperServerImpl} from '../FlipperServerImpl';
 
 export abstract class ServerDevice {
   readonly info: DeviceDescription;
   readonly flipperServer: FlipperServerImpl;
   connected = true;
+
+  protected stopCrashWatcherCb?: () => void;
+
+  readonly logListener: DeviceListener = new NoopListener(() => this.connected);
+  readonly crashWatcher: DeviceListener = new NoopListener(
+    () => this.connected,
+  );
 
   constructor(flipperServer: FlipperServerImpl, info: DeviceDescription) {
     this.flipperServer = flipperServer;
@@ -36,28 +44,17 @@ export abstract class ServerDevice {
    */
   disconnect(): void {
     this.connected = false;
-  }
-
-  startLogging() {
-    // to be subclassed
-  }
-
-  stopLogging() {
-    // to be subclassed
-  }
-
-  async screenshotAvailable(): Promise<boolean> {
-    return false;
+    this.info.features.screenCaptureAvailable = false;
+    this.info.features.screenshotAvailable = false;
+    this.logListener.stop();
+    this.crashWatcher.stop();
+    this.flipperServer.pluginManager.stopAllServerAddOns(this.info.serial);
   }
 
   screenshot(): Promise<Buffer> {
     return Promise.reject(
       new Error('No screenshot support for current device'),
     );
-  }
-
-  async screenCaptureAvailable(): Promise<boolean> {
-    return false;
   }
 
   async startScreenCapture(_destination: string): Promise<void> {
@@ -82,5 +79,9 @@ export abstract class ServerDevice {
 
   async navigateToLocation(_location: string) {
     throw new Error('navigateLocation not implemented on BaseDevice');
+  }
+
+  async installApp(_appBundlePath: string): Promise<void> {
+    throw new Error('Install not implemented');
   }
 }

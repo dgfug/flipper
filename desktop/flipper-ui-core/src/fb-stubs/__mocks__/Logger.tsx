@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -20,7 +20,7 @@ const instance = {
   debug: jest.fn(),
 };
 
-export function extractError(...data: Array<any>): {
+export function LoggerExtractError(...data: Array<any>): {
   message: string;
   error: Error;
 } {

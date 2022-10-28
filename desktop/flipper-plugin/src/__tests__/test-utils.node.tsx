@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,12 +9,12 @@
 
 import * as TestUtils from '../test-utils/test-utils';
 import * as testPlugin from './TestPlugin';
-import {createState} from '../state/atom';
-import {PluginClient} from '../plugin/Plugin';
-import {DevicePluginClient} from '../plugin/DevicePlugin';
+import {createState} from 'flipper-plugin-core';
+import {PluginClient} from 'flipper-plugin-core';
+import {DevicePluginClient} from 'flipper-plugin-core';
 import mockConsole from 'jest-mock-console';
 import {sleep} from 'flipper-common';
-import {createDataSource} from '../state/createDataSource';
+import {createDataSource} from 'flipper-plugin-core';
 
 test('it can start a plugin and lifecycle events', () => {
   const {instance, ...p} = TestUtils.startPlugin(testPlugin);
@@ -166,7 +166,9 @@ test('a plugin cannot send messages after being disconnected', async () => {
     await instance.getCurrentState();
   } catch (e) {
     threw = true; // for some weird reason expect(async () => instance.getCurrentState()).toThrow(...) doesn't work today...
-    expect(e).toMatchInlineSnapshot(`[Error: Plugin is not connected]`);
+    expect(e).toMatchInlineSnapshot(
+      `[Error: SandyPluginInstance.assertConnected -> plugin is not connected]`,
+    );
   }
   expect(threw).toBeTruthy();
 });

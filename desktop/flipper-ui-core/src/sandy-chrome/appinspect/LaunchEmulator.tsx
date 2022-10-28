@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,9 +17,17 @@ import {
 } from '@ant-design/icons';
 import {Store} from '../../reducers';
 import {useStore} from '../../utils/useStore';
-import {Layout, renderReactRoot, withTrackingScope} from 'flipper-plugin';
+import {
+  Layout,
+  Spinner,
+  renderReactRoot,
+  withTrackingScope,
+} from 'flipper-plugin';
 import {Provider} from 'react-redux';
 import {IOSDeviceParams} from 'flipper-common';
+import {getRenderHostInstance} from 'flipper-frontend-core';
+import SettingsSheet from '../../chrome/SettingsSheet';
+import {Link} from '../../ui';
 
 const COLD_BOOT = 'cold-boot';
 
@@ -35,23 +43,61 @@ function LaunchEmulatorContainer({onClose}: {onClose: () => void}) {
   return <LaunchEmulatorDialog onClose={onClose} />;
 }
 
+function NoSDKsEnabledAlert({onClose}: {onClose: () => void}) {
+  const [showSettings, setShowSettings] = useState(false);
+  const footer = (
+    <>
+      <Button onClick={onClose}>Close</Button>
+      <Button type="primary" onClick={() => setShowSettings(true)}>
+        Open Settings
+      </Button>
+    </>
+  );
+  return (
+    <>
+      <Modal
+        visible
+        centered
+        onCancel={onClose}
+        title="No Mobile SDKs Enabled"
+        footer={footer}>
+        <Layout.Container gap>
+          <Alert message="You currently have neither Android nor iOS Development support enabled. To use emulators or simulators, you need to enable at least one in the settings." />
+        </Layout.Container>
+      </Modal>
+      {showSettings && (
+        <SettingsSheet
+          platform={
+            getRenderHostInstance().serverConfig.environmentInfo.os.platform
+          }
+          onHide={() => setShowSettings(false)}
+        />
+      )}
+    </>
+  );
+}
+
 export const LaunchEmulatorDialog = withTrackingScope(
   function LaunchEmulatorDialog({onClose}: {onClose: () => void}) {
-    const flipperServer = useStore((state) => state.connections.flipperServer);
     const iosEnabled = useStore((state) => state.settingsState.enableIOS);
     const androidEnabled = useStore(
       (state) => state.settingsState.enableAndroid,
     );
+
     const [iosEmulators, setIosEmulators] = useState<IOSDeviceParams[]>([]);
     const [androidEmulators, setAndroidEmulators] = useState<string[]>([]);
+    const [waitingForIos, setWaitingForIos] = useState(iosEnabled);
+    const [waitingForAndroid, setWaitingForAndroid] = useState(androidEnabled);
+    const waitingForResults = waitingForIos || waitingForAndroid;
 
     useEffect(() => {
       if (!iosEnabled) {
         return;
       }
-      flipperServer!
-        .exec('ios-get-simulators', false)
+      getRenderHostInstance()
+        .flipperServer.exec('ios-get-simulators', false)
         .then((emulators) => {
+          setWaitingForIos(false);
           setIosEmulators(
             emulators.filter(
               (device) =>
@@ -63,21 +109,26 @@ export const LaunchEmulatorDialog = withTrackingScope(
         .catch((e) => {
           console.warn('Failed to find simulators', e);
         });
-    }, [iosEnabled, flipperServer]);
+    }, [iosEnabled]);
 
     useEffect(() => {
       if (!androidEnabled) {
         return;
       }
-      flipperServer!
-        .exec('android-get-emulators')
+      getRenderHostInstance()
+        .flipperServer.exec('android-get-emulators')
         .then((emulators) => {
+          setWaitingForAndroid(false);
           setAndroidEmulators(emulators);
         })
         .catch((e) => {
           console.warn('Failed to find emulators', e);
         });
-    }, [androidEnabled, flipperServer]);
+    }, [androidEnabled]);
+
+    if (!iosEnabled && !androidEnabled) {
+      return <NoSDKsEnabledAlert onClose={onClose} />;
+    }
 
     const items = [
       ...(androidEmulators.length > 0
@@ -85,8 +136,8 @@ export const LaunchEmulatorDialog = withTrackingScope(
         : []),
       ...androidEmulators.map((name) => {
         const launch = (coldBoot: boolean) => {
-          flipperServer!
-            .exec('android-launch-emulator', name, coldBoot)
+          getRenderHostInstance()
+            .flipperServer.exec('android-launch-emulator', name, coldBoot)
             .then(onClose)
             .catch((e) => {
               console.error('Failed to start emulator: ', e);
@@ -123,8 +174,8 @@ export const LaunchEmulatorDialog = withTrackingScope(
         <Button
           key={device.udid}
           onClick={() =>
-            flipperServer!
-              .exec('ios-launch-simulator', device.udid)
+            getRenderHostInstance()
+              .flipperServer.exec('ios-launch-simulator', device.udid)
               .catch((e) => {
                 console.error('Failed to start simulator: ', e);
                 message.error('Failed to start simulator: ' + e);
@@ -136,15 +187,35 @@ export const LaunchEmulatorDialog = withTrackingScope(
       )),
     ];
 
+    const loadingSpinner = (
+      <>
+        {waitingForResults && <Spinner />}
+        {!waitingForResults && items.length === 0 && (
+          <Alert
+            message={
+              <>
+                No emulators available. <br />
+                <Link href="http://fbflipper.com/docs/getting-started/troubleshooting/general/#i-see-no-emulators-available">
+                  Learn more
+                </Link>
+              </>
+            }
+          />
+        )}
+      </>
+    );
+
     return (
       <Modal
         visible
+        centered
         onCancel={onClose}
         title="Launch Emulator"
         footer={null}
-        bodyStyle={{maxHeight: 400, overflow: 'auto'}}>
+        bodyStyle={{maxHeight: 400, height: 400, overflow: 'auto'}}>
         <Layout.Container gap>
-          {items.length ? items : <Alert message="No emulators available" />}
+          {items.length ? items : <></>}
+          {loadingSpinner}
         </Layout.Container>
       </Modal>
     );

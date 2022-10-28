@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 package com.facebook.flipper.android;
 
+import android.os.StrictMode;
 import android.util.Log;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,8 +18,8 @@ class FlipperProps {
 
   private static final String FLIPPER_PORTS_PROP_NAME = "flipper.ports";
   private static final String FLIPPER_ALT_PORTS_PROP_NAME = "flipper.alt.ports";
-  private static final int DEFAULT_INSECURE_PORT = 8089;
-  private static final int DEFAULT_SECURE_PORT = 8088;
+  private static final int DEFAULT_INSECURE_PORT = 9089;
+  private static final int DEFAULT_SECURE_PORT = 9088;
   private static final int DEFAULT_ALT_INSECURE_PORT = 9089;
   private static final int DEFAULT_ALT_SECURE_PORT = 9088;
   private static final String TAG = "Flipper";
@@ -81,6 +82,9 @@ class FlipperProps {
     String propValue = null;
     Process process = null;
     BufferedReader reader = null;
+
+    // this function does not read from disk and this tool is for debug only
+    StrictMode.ThreadPolicy oldPolicy = StrictMode.allowThreadDiskReads();
     try {
       process = Runtime.getRuntime().exec(new String[] {"/system/bin/getprop", propsName});
       reader =
@@ -107,6 +111,7 @@ class FlipperProps {
       if (process != null) {
         process.destroy();
       }
+      StrictMode.setThreadPolicy(oldPolicy);
     }
     return propValue;
   }

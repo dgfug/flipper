@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,14 +7,29 @@
  * @format
  */
 
+import {FlipperDoctor} from './doctor';
 import {
   DeviceSpec,
-  DeviceType as PluginDeviceType,
+  DeviceType,
+  DownloadablePluginDetails,
+  InstalledPluginDetails,
+  MarketplacePluginDetails,
   OS as PluginOS,
-} from 'flipper-plugin-lib';
+  UpdatablePluginDetails,
+} from './PluginDetails';
+import {ServerAddOnStartDetails} from './ServerAddOn';
+import {
+  EnvironmentInfo,
+  LauncherSettings,
+  ProcessConfig,
+  Settings,
+} from './settings';
+import {LoggerInfo} from './utils/Logger';
 
 // In the future, this file would deserve it's own package, as it doesn't really relate to plugins.
 // Since flipper-plugin however is currently shared among server, client and defines a lot of base types, leaving it here for now.
+
+export type FlipperServerType = 'embedded' | 'external';
 
 export type FlipperServerState =
   | 'pending'
@@ -23,9 +38,7 @@ export type FlipperServerState =
   | 'error'
   | 'closed';
 
-export type DeviceType = PluginDeviceType;
-
-export type DeviceOS = PluginOS | 'Windows' | 'MacOS' | 'Browser' | 'Linux';
+export type DeviceOS = PluginOS;
 
 export type DeviceDescription = {
   readonly os: DeviceOS;
@@ -33,6 +46,10 @@ export type DeviceDescription = {
   readonly deviceType: DeviceType;
   readonly serial: string;
   readonly icon?: string;
+  readonly features: {
+    screenshotAvailable: boolean;
+    screenCaptureAvailable: boolean;
+  };
   // Android specific information
   readonly specs?: DeviceSpec[];
   readonly abiList?: string[];
@@ -70,6 +87,7 @@ export type ClientQuery = {
   readonly device: string;
   readonly device_id: string;
   readonly sdk_version?: number;
+  rsocket?: boolean;
 };
 
 export type ClientDescription = {
@@ -92,10 +110,10 @@ export type ClientResponseType =
   | {success?: never; error: ClientErrorType; length: number};
 
 export type FlipperServerEvents = {
-  'server-state': {state: FlipperServerState; error?: Error};
+  'server-state': {state: FlipperServerState; error?: string};
   'server-error': any;
   notification: {
-    type: 'error';
+    type: 'success' | 'info' | 'error' | 'warning';
     title: string;
     description: string;
   };
@@ -105,6 +123,10 @@ export type FlipperServerEvents = {
     serial: string;
     entry: DeviceLogEntry;
   };
+  'device-crash': {
+    serial: string;
+    crash: CrashLog;
+  };
   'client-setup': UninitializedClient;
   'client-connected': ClientDescription;
   'client-disconnected': {id: string};
@@ -112,6 +134,9 @@ export type FlipperServerEvents = {
     id: string;
     message: string;
   };
+  'plugins-server-add-on-message': ExecuteMessage;
+  'download-file-update': DownloadFileUpdate;
+  'server-log': LoggerInfo;
 };
 
 export type IOSDeviceParams = {
@@ -122,11 +147,93 @@ export type IOSDeviceParams = {
   state?: string;
 };
 
+// Serializable subset of StatsBase from fs.d.ts
+export interface FSStatsLike {
+  isFile: boolean;
+  isDirectory: boolean;
+  isSymbolicLink: boolean;
+  mode: number;
+  uid: number;
+  gid: number;
+  size: number;
+  atimeMs: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  birthtimeMs: number;
+}
+
+export interface DeviceDebugFile {
+  path: string;
+  data: string;
+}
+export interface DeviceDebugCommand {
+  command: string;
+  result: string;
+}
+export interface DeviceDebugData {
+  serial: string;
+  appId: string;
+  data: (DeviceDebugFile | DeviceDebugCommand)[];
+}
+
+export interface PluginSource {
+  js: string;
+  css?: string;
+}
 export type FlipperServerCommands = {
-  'device-start-logging': (serial: string) => Promise<void>;
-  'device-stop-logging': (serial: string) => Promise<void>;
-  'device-supports-screenshot': (serial: string) => Promise<boolean>;
-  'device-supports-screencapture': (serial: string) => Promise<boolean>;
+  'get-server-state': () => Promise<{
+    state: FlipperServerState;
+    error?: string;
+  }>;
+  'node-api-fs-access': (path: string, mode?: number) => Promise<void>;
+  'node-api-fs-pathExists': (path: string, mode?: number) => Promise<boolean>;
+  'node-api-fs-unlink': (path: string) => Promise<void>;
+  'node-api-fs-mkdir': (
+    path: string,
+    options?: {recursive?: boolean} & MkdirOptions,
+  ) => Promise<string | void>;
+  'node-api-fs-rm': (path: string, options?: RmOptions) => Promise<void>;
+  'node-api-fs-copyFile': (
+    src: string,
+    dest: string,
+    flags?: number,
+  ) => Promise<void>;
+  'node-api-fs-stat': (path: string) => Promise<FSStatsLike>;
+  'node-api-fs-readlink': (path: string) => Promise<string>;
+  'node-api-fs-readfile': (
+    path: string,
+    options?: {encoding?: BufferEncoding},
+  ) => Promise<string>;
+  'node-api-fs-readfile-binary': (
+    path: string,
+  ) => Promise<string /* base64 encoded */>;
+  'node-api-fs-writefile': (
+    path: string,
+    contents: string,
+    options?: {encoding?: BufferEncoding},
+  ) => Promise<void>;
+  'node-api-fs-writefile-binary': (
+    path: string,
+    base64contents: string,
+  ) => Promise<void>;
+  /**
+   * @throws ExecError
+   */
+  'node-api-exec': (
+    command: string,
+    options?: ExecOptions & {encoding?: BufferEncoding},
+  ) => Promise<ExecOut<string>>;
+  'download-file-start': (
+    url: string,
+    dest: string,
+    options?: DownloadFileStartOptions,
+  ) => Promise<DownloadFileStartResponse>;
+  'get-config': () => Promise<FlipperServerConfig>;
+  'get-changelog': () => Promise<string>;
+  'device-list': () => Promise<DeviceDescription[]>;
+  'device-find': (
+    deviceSerial: string,
+  ) => Promise<DeviceDescription | undefined>;
   'device-take-screenshot': (serial: string) => Promise<string>; // base64 encoded buffer
   'device-start-screencapture': (
     serial: string,
@@ -134,6 +241,10 @@ export type FlipperServerCommands = {
   ) => Promise<void>;
   'device-stop-screencapture': (serial: string) => Promise<string>; // file path
   'device-shell-exec': (serial: string, command: string) => Promise<string>;
+  'device-install-app': (
+    serial: string,
+    appBundlePath: string,
+  ) => Promise<void>;
   'device-forward-port': (
     serial: string,
     local: string,
@@ -141,7 +252,10 @@ export type FlipperServerCommands = {
   ) => Promise<boolean>;
   'device-clear-logs': (serial: string) => Promise<void>;
   'device-navigate': (serial: string, location: string) => Promise<void>;
+  'fetch-debug-data': () => Promise<DeviceDebugData[]>;
   'metro-command': (serial: string, command: string) => Promise<void>;
+  'client-list': () => Promise<ClientDescription[]>;
+  'client-find': (clientId: string) => Promise<ClientDescription | undefined>;
   'client-request': (clientId: string, payload: any) => Promise<void>;
   'client-request-response': (
     clientId: string,
@@ -151,9 +265,236 @@ export type FlipperServerCommands = {
   'android-launch-emulator': (name: string, coldboot: boolean) => Promise<void>;
   'ios-get-simulators': (bootedOnly: boolean) => Promise<IOSDeviceParams[]>;
   'ios-launch-simulator': (udid: string) => Promise<void>;
+  'persist-settings': (settings: Settings) => Promise<void>;
+  'persist-launcher-settings': (settings: LauncherSettings) => Promise<void>;
+  'keychain-write': (service: string, token: string) => Promise<void>;
+  'keychain-read': (service: string) => Promise<string>;
+  'keychain-unset': (service: string) => Promise<void>;
+  'plugins-load-dynamic-plugins': () => Promise<InstalledPluginDetails[]>;
+  'plugins-load-marketplace-plugins': () => Promise<MarketplacePluginDetails[]>;
+  'plugins-get-installed-plugins': () => Promise<InstalledPluginDetails[]>;
+  'plugins-get-updatable-plugins': (
+    query: string | undefined,
+  ) => Promise<UpdatablePluginDetails[]>;
+  'plugin-start-download': (
+    plugin: DownloadablePluginDetails,
+  ) => Promise<InstalledPluginDetails>;
+  'plugin-source': (path: string) => Promise<PluginSource>;
+  'plugins-install-from-marketplace': (
+    name: string,
+  ) => Promise<InstalledPluginDetails>;
+  'plugins-install-from-npm': (name: string) => Promise<InstalledPluginDetails>;
+  'plugins-install-from-file': (
+    path: string,
+  ) => Promise<InstalledPluginDetails>;
+  'plugins-remove-plugins': (names: string[]) => Promise<void>;
+  'plugins-server-add-on-start': (
+    pluginName: string,
+    details: ServerAddOnStartDetails,
+    owner: string,
+  ) => Promise<void>;
+  'plugins-server-add-on-stop': (
+    pluginName: string,
+    owner: string,
+  ) => Promise<void>;
+  'plugins-server-add-on-request-response': (
+    payload: ExecuteMessage,
+  ) => Promise<ClientResponseType>;
+  'doctor-get-healthchecks': (
+    settings: FlipperDoctor.HealthcheckSettings,
+  ) => Promise<FlipperDoctor.Healthchecks>;
+  'doctor-run-healthcheck': (
+    settings: FlipperDoctor.HealthcheckSettings,
+    category: keyof FlipperDoctor.Healthchecks,
+    name: string,
+  ) => Promise<FlipperDoctor.HealthcheckResult>;
+  'open-file': (path: string) => Promise<void>;
+  'intern-graph-post': (
+    endpoint: string,
+    formFields: Record<string, any>,
+    fileFields: Record<string, GraphFileUpload>,
+    options: {
+      timeout?: number;
+      internGraphUrl?: string;
+    },
+  ) => Promise<GraphResponse>;
+  'intern-graph-get': (
+    endpoint: string,
+    params: Record<string, any>,
+    options: {
+      timeout?: number;
+      internGraphUrl?: string;
+    },
+  ) => Promise<GraphResponse>;
+  'intern-upload-scribe-logs': (
+    messages: {category: string; message: string}[],
+  ) => Promise<void>;
+  'intern-cloud-upload': (path: string) => Promise<string>;
+  shutdown: () => Promise<void>;
+  'is-logged-in': () => Promise<boolean>;
+  'environment-info': () => Promise<EnvironmentInfo>;
 };
 
+export type GraphResponse = {
+  status: number;
+  data: any;
+};
+
+export type GraphFileUpload = {
+  path?: string;
+  contents?: string;
+  filename?: string;
+  contentType?: string;
+};
+
+/**
+ * White listed environment variables that can be used in Flipper UI / plugins
+ */
+const environmentVariables = {
+  NODE_ENV: 1,
+  DEV_SERVER_URL: 1,
+  CONFIG: 1,
+  FLIPPER_ENABLED_PLUGINS: 1,
+  FB_ONDEMAND: 1,
+  FLIPPER_INTERNGRAPH_URL: 1,
+  JEST_WORKER_ID: 1,
+  FLIPPER_DOCS_BASE_URL: 1,
+  FLIPPER_NO_PLUGIN_AUTO_UPDATE: 1,
+  FLIPPER_NO_PLUGIN_MARKETPLACE: 1,
+  HOME: 1,
+  METRO_PORT_ENV_VAR: 1,
+  FLIPPER_PLUGIN_AUTO_UPDATE_POLLING_INTERVAL: 1,
+} as const;
+export type ENVIRONMENT_VARIABLES = keyof typeof environmentVariables;
+
+/**
+ * Grab all environment variables from a process.env object, without leaking variables which usage isn't declared in ENVIRONMENT_VARIABLES
+ */
+export function parseEnvironmentVariables(
+  baseEnv: any,
+): Partial<Record<ENVIRONMENT_VARIABLES, string>> {
+  const result: any = {};
+  Object.keys(environmentVariables).forEach((k) => {
+    result[k] = baseEnv[k];
+  });
+
+  return result;
+}
+
+type ENVIRONMENT_PATHS =
+  | 'appPath'
+  | 'homePath'
+  | 'execPath'
+  | 'staticPath'
+  | 'tempPath'
+  | 'desktopPath';
+
+export interface ExecOptions {
+  maxBuffer?: number;
+  timeout?: number;
+  cwd?: string;
+}
+
+export interface ExecError {
+  message: string;
+  stdout: string;
+  stderr: string;
+  stack?: string;
+  cmd?: string;
+  killed?: boolean;
+  code?: number;
+}
+
+export interface ExecOut<StdOutErrType> {
+  stdout: StdOutErrType;
+  stderr: StdOutErrType;
+}
+export type BufferEncoding =
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
+
+export interface MkdirOptions {
+  mode?: string | number;
+}
+
+export interface RmOptions {
+  maxRetries?: number;
+}
+
+export interface DownloadFileStartOptions {
+  method?: 'GET' | 'POST';
+  timeout?: number;
+  maxRedirects?: number;
+  headers?: Record<string, string>;
+  overwrite?: boolean;
+}
+
+export type DownloadFileUpdate = {
+  id: string;
+  downloaded: number;
+  /**
+   * Set to 0 if unknown
+   */
+  totalSize: number;
+} & (
+  | {
+      status: 'downloading';
+    }
+  | {
+      status: 'success';
+    }
+  | {status: 'error'; message: string; stack?: string}
+);
+
+export interface DownloadFileStartResponse {
+  /**
+   * Download ID
+   */
+  id: string;
+  /**
+   * Response status
+   */
+  status: number;
+  /**
+   * Response status text
+   */
+  statusText: string;
+  /**
+   * Response headers
+   */
+  headers: Record<string, string>;
+  /**
+   * Size of the file, being downloaded, in bytes. Inferred from the "Content-Length" header. Set to 0 if unknown.
+   */
+  totalSize: number;
+}
+
+export type FlipperServerConfig = {
+  gatekeepers: Record<string, boolean>;
+  env: Partial<Record<ENVIRONMENT_VARIABLES, string>>;
+  paths: Record<ENVIRONMENT_PATHS, string>;
+  settings: Settings;
+  launcherSettings: LauncherSettings;
+  processConfig: ProcessConfig;
+  validWebSocketOrigins: string[];
+  environmentInfo: EnvironmentInfo;
+  type?: FlipperServerType;
+};
+
+export interface FlipperServerExecOptions {
+  timeout: number;
+}
 export interface FlipperServer {
+  connect(): Promise<void>;
   on<Event extends keyof FlipperServerEvents>(
     event: Event,
     callback: (payload: FlipperServerEvents[Event]) => void,
@@ -162,6 +503,11 @@ export interface FlipperServer {
     event: Event,
     callback: (payload: FlipperServerEvents[Event]) => void,
   ): void;
+  exec<Event extends keyof FlipperServerCommands>(
+    options: FlipperServerExecOptions,
+    event: Event,
+    ...args: Parameters<FlipperServerCommands[Event]>
+  ): ReturnType<FlipperServerCommands[Event]>;
   exec<Event extends keyof FlipperServerCommands>(
     event: Event,
     ...args: Parameters<FlipperServerCommands[Event]>
@@ -284,6 +630,8 @@ export type ExecuteMessage = {
     params?: unknown;
   };
 };
+
+// TODO: Could we merge it with ClientResponseType?
 export type ResponseMessage =
   | {
       id: number;
@@ -295,3 +643,10 @@ export type ResponseMessage =
       success?: never;
       error: ClientErrorType;
     };
+
+export type CrashLog = {
+  callstack?: string;
+  reason: string;
+  name: string;
+  date?: number;
+};

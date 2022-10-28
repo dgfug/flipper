@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,61 +8,21 @@
  */
 
 import {Button as AntButton, message} from 'antd';
-import React, {useState, useEffect, useCallback} from 'react';
-import path from 'path';
-import fs from 'fs-extra';
-import open from 'open';
+import React, {useState, useCallback} from 'react';
 import {capture, getCaptureLocation, getFileName} from '../utils/screenshot';
 import {CameraOutlined, VideoCameraOutlined} from '@ant-design/icons';
 import {useStore} from '../utils/useStore';
+import {getRenderHostInstance} from 'flipper-frontend-core';
+import {path} from 'flipper-plugin';
 
-async function openFile(path: string | null) {
-  if (!path) {
-    return;
-  }
-
-  let fileStat;
-  try {
-    fileStat = await fs.stat(path);
-  } catch (err) {
-    message.error(`Couldn't open captured file: ${path}: ${err}`);
-    return;
-  }
-
-  // Rather randomly chosen. Some FSs still reserve 8 bytes for empty files.
-  // If this doesn't reliably catch "corrupt" files, you might want to increase this.
-  if (fileStat.size <= 8) {
-    message.error(
-      'Screencap file retrieved from device appears to be corrupt. Your device may not support screen recording. Sometimes restarting your device can help.',
-      0,
-    );
-    return;
-  }
-
-  try {
-    await open(path);
-  } catch (e) {
-    console.warn(`Opening ${path} failed with error ${e}.`);
-  }
+async function openFile(path: string) {
+  getRenderHostInstance().flipperServer.exec('open-file', path);
 }
 
 export default function ScreenCaptureButtons() {
   const selectedDevice = useStore((state) => state.connections.selectedDevice);
   const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
-  const [isRecordingAvailable, setIsRecordingAvailable] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-
-  useEffect(() => {
-    let canceled = false;
-    selectedDevice?.screenCaptureAvailable().then((result) => {
-      if (!canceled) {
-        setIsRecordingAvailable(result);
-      }
-    });
-    return () => {
-      canceled = true;
-    };
-  }, [selectedDevice]);
 
   const handleScreenshot = useCallback(() => {
     setIsTakingScreenshot(true);
@@ -92,7 +52,11 @@ export default function ScreenCaptureButtons() {
     } else {
       return selectedDevice
         .stopScreenCapture()
-        .then(openFile)
+        .then((f) => {
+          if (f) {
+            return openFile(f);
+          }
+        })
         .catch((e) => {
           console.error('Failed to start recording', e);
           message.error('Failed to start recording' + e);
@@ -110,7 +74,10 @@ export default function ScreenCaptureButtons() {
         title="Take Screenshot"
         type="ghost"
         onClick={handleScreenshot}
-        disabled={!selectedDevice}
+        disabled={
+          !selectedDevice ||
+          !selectedDevice.description.features.screenshotAvailable
+        }
         loading={isTakingScreenshot}
       />
       <AntButton
@@ -118,7 +85,10 @@ export default function ScreenCaptureButtons() {
         title="Make Screen Recording"
         type={isRecording ? 'primary' : 'ghost'}
         onClick={handleRecording}
-        disabled={!selectedDevice || !isRecordingAvailable}
+        disabled={
+          !selectedDevice ||
+          !selectedDevice.description.features.screenCaptureAvailable
+        }
         danger={isRecording}
       />
     </>

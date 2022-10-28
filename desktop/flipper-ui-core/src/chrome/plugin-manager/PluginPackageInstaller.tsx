@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,10 +16,9 @@ import {
   LoadingIndicator,
 } from '../../ui';
 import styled from '@emotion/styled';
-import {default as FileSelector} from '../../ui/components/FileSelector';
 import React, {useState} from 'react';
-import {installPluginFromFile} from 'flipper-plugin-lib';
-import {Toolbar} from 'flipper-plugin';
+import {Toolbar, FileSelector} from 'flipper-plugin';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const CenteredGlyph = styled(Glyph)({
   margin: 'auto',
@@ -52,7 +51,10 @@ export default function PluginPackageInstaller({
     setError(undefined);
     setInProgress(true);
     try {
-      await installPluginFromFile(path);
+      await getRenderHostInstance().flipperServer!.exec(
+        'plugins-install-from-file',
+        path,
+      );
       await onInstall();
     } catch (e) {
       setError(e);
@@ -80,10 +82,16 @@ export default function PluginPackageInstaller({
   return (
     <Toolbar>
       <FileSelector
-        placeholderText="Specify path to a Flipper package or just drag and drop it here..."
-        onPathChanged={(e) => {
-          setPath(e.path);
-          setIsPathValid(e.isValid);
+        label="Select a Flipper package or just drag and drop it here..."
+        onChange={(newFile) => {
+          if (newFile) {
+            // TODO: Fix me before implementing Browser Flipper. "path" is only availbale in Electron!
+            setPath(newFile.path!);
+            setIsPathValid(true);
+          } else {
+            setPath('');
+            setIsPathValid(false);
+          }
           setError(undefined);
         }}
       />

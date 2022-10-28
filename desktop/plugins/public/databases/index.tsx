@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -116,6 +116,8 @@ export function plugin(client: PluginClient<Events, Methods>) {
       (Object.values(databases)[0] ? Object.values(databases)[0].id : 0);
     const selectedTable =
       state.selectedDatabaseTable &&
+      selectedDatabase > 0 &&
+      databases.length >= selectedDatabase &&
       databases[selectedDatabase - 1].tables.includes(
         state.selectedDatabaseTable,
       )

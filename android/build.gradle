@@ -1,11 +1,13 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
 
 android {
     compileSdkVersion rootProject.compileSdkVersion
@@ -28,7 +30,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_TOOLCHAIN=clang', '-DANDROID_STL=c++_shared'
-                targets 'flipper', 'event_shared', 'event_extra_shared', 'event_core_shared'
+                targets 'flipper'
             }
         }
     }
@@ -62,12 +64,18 @@ android {
 
     dependencies {
         compileOnly deps.proguardAnnotations
+        implementation deps.kotlinStdLibrary
+
+        implementation deps.kotlinCoroutinesAndroid
+        implementation deps.openssl
         implementation deps.fbjni
         implementation deps.soloader
         implementation deps.jsr305
         implementation deps.supportAppCompat
         implementation deps.supportSqlite
         implementation deps.websocket
+        implementation deps.kotlinxSerializationJson
+
 
         testImplementation deps.mockito
         testImplementation deps.robolectric
@@ -76,6 +84,14 @@ android {
         testImplementation deps.hamcrest
         testImplementation deps.junit
     }
+}
+
+// Patch below is used in case the 'configureCMake' task
+// gets executed in parallel with the 'preBuild' task.
+// Our CMakeFile expects third-party dependencies to be already
+// in-place and patched.
+tasks.matching { it.name.startsWith("configureCMake") }.all {
+    dependsOn(tasks.getByPath(':third-party:prepare'))
 }
 
 preBuild.dependsOn(tasks.getByPath(':third-party:prepare'))

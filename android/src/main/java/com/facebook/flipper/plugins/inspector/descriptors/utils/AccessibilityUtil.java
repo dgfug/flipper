@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -211,7 +211,7 @@ public final class AccessibilityUtil {
     }
   }
 
-  private static boolean supportsAction(AccessibilityNodeInfoCompat node, int action) {
+  protected static boolean supportsAction(AccessibilityNodeInfoCompat node, int action) {
     if (node != null) {
       final int supportedActions = node.getActions();
 

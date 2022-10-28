@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,9 +9,15 @@
 
 import React from 'react';
 
-import {FlipperDevicePlugin, Device, sleep} from 'flipper';
-
-import {FlexColumn, Button, Toolbar, Panel} from 'flipper';
+import {
+  FlipperDevicePlugin,
+  Device,
+  sleep,
+  FlexColumn,
+  Button,
+  Toolbar,
+  Panel,
+} from 'flipper';
 
 import {
   Legend,
@@ -24,8 +30,7 @@ import {
   Tooltip,
 } from 'recharts';
 
-import adb from 'adbkit';
-import {exec} from 'promisify-child-process';
+import {getFlipperLib} from 'flipper-plugin';
 
 const PALETTE = [
   '#FFD700',
@@ -81,7 +86,7 @@ export default class KaiOSGraphs extends FlipperDevicePlugin<State, any, any> {
 
   async init() {
     try {
-      await exec('adb root');
+      await getFlipperLib().remoteServerContext.childProcess.exec('adb root');
     } catch (e) {
       console.error('Error obtaining root on the device', e);
     }

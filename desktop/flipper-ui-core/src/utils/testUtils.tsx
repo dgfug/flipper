@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,7 @@
 import {
   ActivatablePluginDetails,
   DownloadablePluginDetails,
-} from 'flipper-plugin-lib';
+} from 'flipper-common';
 
 export function createMockDownloadablePluginDetails(
   params: {
@@ -56,8 +56,8 @@ export function createMockDownloadablePluginDetails(
     version: version,
     downloadUrl: `http://localhost/${lowercasedID}/${version}`,
     lastUpdated: lastUpdated,
-    isBundled: false,
     isActivatable: false,
+    isEnabledByDefault: false,
   };
   return details;
 }
@@ -68,7 +68,6 @@ export function createMockActivatablePluginDetails(
   return {
     id: 'Hello',
     specVersion: 2,
-    isBundled: false,
     isActivatable: true,
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample1',
     entry: './test/index.js',

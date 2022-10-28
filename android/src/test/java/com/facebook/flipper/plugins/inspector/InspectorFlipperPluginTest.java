@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.robolectric.annotation.LooperMode.Mode.LEGACY;
 
 import android.app.Application;
+import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
@@ -413,6 +414,11 @@ public class InspectorFlipperPluginTest {
     @Override
     public void setHighlighted(TestNode testNode, boolean b, boolean b1) throws Exception {
       testNode.highlighted = b;
+    }
+
+    @Override
+    public Bitmap getSnapshot(TestNode testNode, boolean includeChildren) {
+      return null;
     }
 
     @Override

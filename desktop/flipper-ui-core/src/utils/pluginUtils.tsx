@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,16 +10,18 @@
 import type {PluginDefinition} from '../plugin';
 import type {State, Store} from '../reducers';
 import type {State as PluginsState} from '../reducers/plugins';
-import type BaseDevice from '../devices/BaseDevice';
+import {
+  BaseDevice,
+  getLatestCompatibleVersionOfEachPlugin,
+} from 'flipper-frontend-core';
 import type Client from '../Client';
 import type {
   ActivatablePluginDetails,
-  BundledPluginDetails,
   DownloadablePluginDetails,
   PluginDetails,
-} from 'flipper-plugin-lib';
-import {getLatestCompatibleVersionOfEachPlugin} from '../dispatcher/plugins';
+} from 'flipper-common';
 import {getPluginKey} from './pluginKey';
+import {getAppVersion} from './info';
 
 export type PluginLists = {
   devicePlugins: PluginDefinition[];
@@ -27,7 +29,7 @@ export type PluginLists = {
   enabledPlugins: PluginDefinition[];
   disabledPlugins: PluginDefinition[];
   unavailablePlugins: [plugin: PluginDetails, reason: string][];
-  downloadablePlugins: (DownloadablePluginDetails | BundledPluginDetails)[];
+  downloadablePlugins: DownloadablePluginDetails[];
 };
 
 export type ActivePluginListItem =
@@ -43,7 +45,7 @@ export type ActivePluginListItem =
     }
   | {
       status: 'uninstalled';
-      details: DownloadablePluginDetails | BundledPluginDetails;
+      details: DownloadablePluginDetails;
     }
   | {
       status: 'unavailable';
@@ -125,7 +127,9 @@ export function sortPluginsByName(
   if (isDevicePluginDefinition(b) && !isDevicePluginDefinition(a)) {
     return 1;
   }
-  return getPluginTitle(a) > getPluginTitle(b) ? 1 : -1;
+  return getPluginTitle(a).toLowerCase() > getPluginTitle(b).toLocaleLowerCase()
+    ? 1
+    : -1;
 }
 
 export function isDevicePlugin(activePlugin: ActivePluginListItem) {
@@ -157,7 +161,6 @@ export function computePluginLists(
   >,
   plugins: Pick<
     State['plugins'],
-    | 'bundledPlugins'
     | 'marketplacePlugins'
     | 'loadedPlugins'
     | 'devicePlugins'
@@ -175,14 +178,14 @@ export function computePluginLists(
   enabledPlugins: PluginDefinition[];
   disabledPlugins: PluginDefinition[];
   unavailablePlugins: [plugin: PluginDetails, reason: string][];
-  downloadablePlugins: (DownloadablePluginDetails | BundledPluginDetails)[];
+  downloadablePlugins: DownloadablePluginDetails[];
 } {
   const enabledDevicePluginsState = connections.enabledDevicePlugins;
   const enabledPluginsState = connections.enabledPlugins;
-  const uninstalledMarketplacePlugins = getLatestCompatibleVersionOfEachPlugin([
-    ...plugins.bundledPlugins.values(),
-    ...plugins.marketplacePlugins,
-  ]).filter((p) => !plugins.loadedPlugins.has(p.id));
+  const uninstalledMarketplacePlugins = getLatestCompatibleVersionOfEachPlugin(
+    [...plugins.marketplacePlugins],
+    getAppVersion(),
+  ).filter((p) => !plugins.loadedPlugins.has(p.id));
   const devicePlugins: PluginDefinition[] = [...plugins.devicePlugins.values()]
     .filter((p) => device?.supportsPlugin(p))
     .filter((p) => enabledDevicePluginsState.has(p.id));
@@ -200,10 +203,7 @@ export function computePluginLists(
     )
     .filter((p) => !enabledDevicePluginsState.has(p.id));
   const unavailablePlugins: [plugin: PluginDetails, reason: string][] = [];
-  const downloadablePlugins: (
-    | DownloadablePluginDetails
-    | BundledPluginDetails
-  )[] = [];
+  const downloadablePlugins: DownloadablePluginDetails[] = [];
 
   if (device) {
     // find all device plugins that aren't part of the current device / metro
@@ -426,7 +426,6 @@ export type PluginStatus =
   | 'unknown'
   | 'failed'
   | 'gatekeeped'
-  | 'bundle_installable'
   | 'marketplace_installable';
 
 export function getPluginStatus(
@@ -446,9 +445,6 @@ export function getPluginStatus(
   );
   if (failedPluginEntry) {
     return ['failed', failedPluginEntry[1]];
-  }
-  if (state.bundledPlugins.has(id)) {
-    return ['bundle_installable'];
   }
   if (state.marketplacePlugins.find((d) => d.id === id)) {
     return ['marketplace_installable'];

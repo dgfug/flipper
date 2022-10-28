@@ -1,5 +1,6 @@
 *.bundle.js
 plugins/fb/relaydevtools/relay-devtools/*
+plugins/public/reactdevtools/fb/*
 latest
 resources
 templates
@@ -12,5 +13,5 @@ react-native/ReactNativeFlipperExample
 scripts/generate-changelog.js
 static/index.js
 static/defaultPlugins/*
-app/src/defaultPlugins/index.tsx
 generated
+flipper-server/static

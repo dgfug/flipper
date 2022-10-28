@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,7 +11,12 @@ import {FlipperConnection} from './connection';
 import {FlipperRequest, FlipperResponse} from './message';
 import {FlipperPlugin} from './plugin';
 import {FlipperResponder} from './responder';
-import {assert, detectDevice, detectOS} from './util';
+import {
+  assert,
+  detectDevice,
+  detectOS,
+  getDeviceId as getDeviceIdDefault,
+} from './util';
 import {RECONNECT_TIMEOUT} from './consts';
 
 // TODO: Share with flipper-server-core
@@ -133,13 +138,15 @@ interface FlipperClientOptions {
   onError?: (e: unknown) => void;
   // Timeout after which client tries to reconnect to Flipper
   reconnectTimeout?: number;
+  // Set device ID. Default: random ID persisted to local storage.
+  getDeviceId?: () => Promise<string> | string;
 }
 
 export class FlipperClient {
   private readonly plugins: Map<string, FlipperPlugin> = new Map();
   private readonly connections: Map<string, FlipperConnection> = new Map();
   private ws?: FlipperWebSocket;
-  private readonly devicePseudoId = `${Date.now()}.${Math.random()}`;
+  private deviceId!: string;
   private readonly os = detectOS();
   private readonly device = detectDevice();
   private reconnectionTimer?: NodeJS.Timeout;
@@ -171,12 +178,14 @@ export class FlipperClient {
       websocketFactory = (url) => new WebSocket(url) as FlipperWebSocket,
       onError = (e) => console.error('WebSocket error', e),
       reconnectTimeout = RECONNECT_TIMEOUT,
+      getDeviceId = getDeviceIdDefault,
     }: FlipperClientOptions = {},
   ): Promise<void> {
     if (this.ws) {
       return;
     }
 
+    this.deviceId = await getDeviceId();
     this.appName = appName;
     this.onError = onError;
     this.urlBase = urlBase;
@@ -190,6 +199,11 @@ export class FlipperClient {
   }
 
   stop() {
+    if (this.reconnectionTimer) {
+      clearTimeout(this.reconnectionTimer);
+      this.reconnectionTimer = undefined;
+    }
+
     if (!this.ws) {
       return;
     }
@@ -213,9 +227,10 @@ export class FlipperClient {
   }
 
   private connectToFlipper() {
-    const url = `ws://${this.urlBase}?device_id=${this.device}${this.devicePseudoId}&device=${this.device}&app=${this.appName}&os=${this.os}`;
+    const url = `ws://${this.urlBase}?device_id=${this.device}${this.deviceId}&device=${this.device}&app=${this.appName}&os=${this.os}`;
+    const encodedUrl = encodeURI(url);
 
-    this.ws = this.websocketFactory(url);
+    this.ws = this.websocketFactory(encodedUrl);
 
     this.ws.onerror = (error) => {
       this.onError(error);

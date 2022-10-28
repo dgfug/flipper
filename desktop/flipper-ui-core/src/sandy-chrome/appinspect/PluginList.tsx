@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -23,8 +23,8 @@ import {useDispatch, useStore} from '../../utils/useStore';
 import {getPluginTitle, getPluginTooltip} from '../../utils/pluginUtils';
 import {selectPlugin} from '../../reducers/connections';
 import Client from '../../Client';
-import BaseDevice from '../../devices/BaseDevice';
-import {DownloadablePluginDetails} from 'flipper-plugin-lib';
+import {BaseDevice} from 'flipper-frontend-core';
+import {DownloadablePluginDetails} from 'flipper-common';
 import {
   DownloadablePluginState,
   PluginDownloadStatus,
@@ -35,7 +35,6 @@ import {
   switchPlugin,
   uninstallPlugin,
 } from '../../reducers/pluginManager';
-import {BundledPluginDetails} from 'flipper-plugin-lib';
 import {reportUsage} from 'flipper-common';
 import ConnectivityStatus from './fb-stubs/ConnectivityStatus';
 import {useSelector} from 'react-redux';
@@ -73,14 +72,8 @@ export const PluginList = memo(function PluginList({
   const isArchived = activeDevice?.isArchived;
 
   const annotatedDownloadablePlugins = useMemoize<
-    [
-      Record<string, DownloadablePluginState>,
-      (DownloadablePluginDetails | BundledPluginDetails)[],
-    ],
-    [
-      plugin: DownloadablePluginDetails | BundledPluginDetails,
-      downloadStatus?: PluginDownloadStatus,
-    ][]
+    [Record<string, DownloadablePluginState>, DownloadablePluginDetails[]],
+    [plugin: DownloadablePluginDetails, downloadStatus?: PluginDownloadStatus][]
   >(
     (downloads, downloadablePlugins) => {
       const downloadMap = new Map(
@@ -137,11 +130,7 @@ export const PluginList = memo(function PluginList({
     (id: string) => {
       const plugin = downloadablePlugins.find((p) => p.id === id)!;
       reportUsage('plugin:install', {version: plugin.version}, plugin.id);
-      if (plugin.isBundled) {
-        dispatch(loadPlugin({plugin, enable: true, notifyIfFailed: true}));
-      } else {
-        dispatch(startPluginDownload({plugin, startedByUser: true}));
-      }
+      dispatch(startPluginDownload({plugin, startedByUser: true}));
     },
     [downloadablePlugins, dispatch],
   );

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import {Button, Dropdown, Menu, Radio, Typography} from 'antd';
+import {Button, Dropdown, Menu, Radio, Tooltip, Typography} from 'antd';
 import {
   AppleOutlined,
   AndroidOutlined,
@@ -25,13 +25,13 @@ import {
   selectClient,
   selectDevice,
 } from '../../reducers/connections';
-import BaseDevice from '../../devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import Client from '../../Client';
 import {State} from '../../reducers';
 import {brandColors, brandIcons, colors} from '../../ui/components/colors';
 import {TroubleshootingGuide} from './fb-stubs/TroubleshootingGuide';
-import GK from '../../fb-stubs/GK';
 import {getSelectableDevices} from '../../selectors/connections';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const {Text} = Typography;
 
@@ -102,7 +102,14 @@ export function AppSelector() {
             }>
             <AppInspectButton title="Select the device / app to inspect">
               <Layout.Horizontal gap center>
-                <AppIcon appname={client?.query.app} device={selectedDevice} />
+                {client?.query.rsocket ? (
+                  <DeprecationIcon />
+                ) : (
+                  <AppIcon
+                    appname={client?.query.app}
+                    device={selectedDevice}
+                  />
+                )}
                 <Layout.Container grow shrink>
                   <Text strong>{client?.query.app ?? ''}</Text>
                   <Text>{selectedDevice?.title || 'Available devices'}</Text>
@@ -127,7 +134,7 @@ export function AppSelector() {
         </Layout.Horizontal>
       )}
       <TroubleshootingGuide
-        showGuide={GK.get('flipper_self_sufficiency')}
+        showGuide={getRenderHostInstance().GK('flipper_self_sufficiency')}
         devicesDetected={entries.length}
       />
     </>
@@ -181,6 +188,21 @@ function AppIcon({
   );
 }
 
+function DeprecationIcon() {
+  return (
+    <Tooltip title="RSockets are being deprecated at Flipper. Please, use the latest Flipper client in your app to migrate to WebSockets.">
+      <AppIconContainer style={{background: theme.warningColor}}>
+        <Glyph
+          name="caution-triangle"
+          size={24}
+          variant="outline"
+          color="white"
+        />
+      </AppIconContainer>
+    </Tooltip>
+  );
+}
+
 const AppIconContainer = styled.div({
   borderRadius: 4,
   width: 36,
@@ -213,7 +235,7 @@ function computeEntries(
         onClick={() => {
           onSelectApp(device, client);
         }}>
-        <Radio value={client.id}>
+        <Radio value={client.id} style={{marginLeft: theme.space.large}}>
           <ClientTitle client={client} />
         </Radio>
       </Menu.Item>

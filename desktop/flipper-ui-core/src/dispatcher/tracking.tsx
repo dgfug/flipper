@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,8 +7,7 @@
  * @format
  */
 
-import {performance} from 'perf_hooks';
-import {EventEmitter} from 'events';
+import EventEmitter from 'eventemitter3';
 
 import {State, Store} from '../reducers/index';
 import {Logger} from 'flipper-common';
@@ -23,13 +22,12 @@ import {
   selectionChanged,
 } from '../reducers/usageTracking';
 import produce from 'immer';
-import BaseDevice from '../devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import {deconstructClientId} from 'flipper-common';
-import {getCPUUsage} from 'process';
 import {sideEffect} from '../utils/sideEffect';
 import {getSelectionInfo} from '../utils/info';
 import type {SelectionInfo} from '../utils/info';
-import {getRenderHostInstance} from '../RenderHost';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const TIME_SPENT_EVENT = 'time-spent';
 
@@ -96,7 +94,8 @@ export default (store: Store, logger: Logger) => {
 
   const oldExitData = loadExitData();
   if (oldExitData) {
-    const isReload = renderHost.processId === oldExitData.pid;
+    const isReload =
+      renderHost.serverConfig.environmentInfo.processId === oldExitData.pid;
     const timeSinceLastStartup =
       Date.now() - parseInt(oldExitData.lastSeen, 10);
     // console.log(isReload ? 'reload' : 'restart', oldExitData);
@@ -239,7 +238,7 @@ export default (store: Store, logger: Logger) => {
       sdkVersion,
       isForeground: state.application.windowIsFocused,
       usedJSHeapSize: (window.performance as any).memory.usedJSHeapSize,
-      cpuLoad: getCPUUsage().percentCPUUsage,
+      cpuLoad: renderHost.getPercentCPUUsage?.() ?? 0,
     };
 
     // reset dropped frames counter
@@ -371,7 +370,7 @@ export function persistExitData(
       ? deconstructClientId(state.selectedAppId).app
       : '',
     cleanExit,
-    pid: getRenderHostInstance().processId,
+    pid: getRenderHostInstance().serverConfig.environmentInfo.processId,
   };
   window.localStorage.setItem(
     flipperExitDataKey,

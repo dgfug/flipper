@@ -1,13 +1,15 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-use crate::types::{PackType, Platform};
 use std::fmt;
 use std::path::PathBuf;
+
+use crate::types::PackType;
+use crate::types::Platform;
 
 #[derive(Debug)]
 pub enum Error {
@@ -29,7 +31,7 @@ impl fmt::Display for Error {
             ),
             Self::MissingPlatformDefinition(platform) => write!(
                 f,
-                "Platform {} is not defined in the given packlist.",
+                "Platform {:?} is not defined in the given packlist.",
                 platform
             ),
         }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,38 +14,28 @@ import {
   _setGlobalInteractionReporter,
   _LoggerContext,
 } from 'flipper-plugin';
-// eslint-disable-next-line flipper/no-electron-remote-imports
-import {
-  ipcRenderer,
-  remote,
-  SaveDialogReturnValue,
-  clipboard,
-  shell,
-} from 'electron';
-import type {RenderHost} from 'flipper-ui-core';
+// eslint-disable-next-line no-restricted-imports,flipper/no-electron-remote-imports
+import {ipcRenderer, SaveDialogReturnValue, clipboard, shell} from 'electron';
 import fs from 'fs';
-import {setupMenuBar} from './setupMenuBar';
-import os from 'os';
+import {setupMenuBarTracking} from './setupMenuBar';
+import {FlipperServer, FlipperServerConfig} from 'flipper-common';
+import type {Icon, RenderHost} from 'flipper-ui-core';
+import {getLocalIconUrl} from '../utils/icons';
+import {getCPUUsage} from 'process';
+import {ElectronIpcClientRenderer} from '../electronIpc';
 
-declare global {
-  interface Window {
-    FlipperRenderHostInstance: RenderHost;
-  }
-}
+export async function initializeElectron(
+  flipperServer: FlipperServer,
+  flipperServerConfig: FlipperServerConfig,
+  electronIpcClient: ElectronIpcClientRenderer,
+) {
+  const electronProcess = await electronIpcClient.send('getProcess');
+  const electronTheme = await electronIpcClient.send('getNativeTheme');
 
-if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
-  // By default Node.JS has its internal certificate storage and doesn't use
-  // the system store. Because of this, it's impossible to access ondemand / devserver
-  // which are signed using some internal self-issued FB certificates. These certificates
-  // are automatically installed to MacOS system store on FB machines, so here we're using
-  // this "mac-ca" library to load them into Node.JS.
-  global.electronRequire('mac-ca');
-}
-
-export function initializeElectron() {
-  const app = remote.app;
-  const execPath = process.execPath || remote.process.execPath;
+  const execPath = process.execPath || electronProcess.execPath;
   const isProduction = !/node_modules[\\/]electron[\\/]/.test(execPath);
+
+  setupMenuBarTracking(electronIpcClient);
 
   function restart(update: boolean = false) {
     if (isProduction) {
@@ -55,25 +45,22 @@ export function initializeElectron() {
             .splice(0, 1)
             .filter((arg) => arg !== '--no-launcher' && arg !== '--no-updater'),
         };
-        remote.app.relaunch(options);
+        electronIpcClient.send('relaunch', options);
       } else {
-        remote.app.relaunch();
+        electronIpcClient.send('relaunch');
       }
-      remote.app.exit();
+      electronIpcClient.send('exit');
     } else {
       // Relaunching the process with the standard way doesn't work in dev mode.
       // So instead we're sending a signal to dev server to kill the current instance of electron and launch new.
-      fetch(
-        `${window.FlipperRenderHostInstance.env.DEV_SERVER_URL}/_restartElectron`,
-        {
-          method: 'POST',
-        },
-      );
+      fetch(`${flipperServerConfig.env.DEV_SERVER_URL}/_restartElectron`, {
+        method: 'POST',
+      });
     }
   }
 
-  window.FlipperRenderHostInstance = {
-    processId: remote.process.pid,
+  FlipperRenderHostInstance = {
+    processId: electronProcess.pid,
     isProduction,
     readTextFromClipboard() {
       return clipboard.readText();
@@ -82,10 +69,11 @@ export function initializeElectron() {
       clipboard.writeText(text);
     },
     async showSaveDialog(options) {
-      return (await remote.dialog.showSaveDialog(options))?.filePath;
+      return (await electronIpcClient.send('showSaveDialog', options))
+        ?.filePath;
     },
     async showOpenDialog({filter, defaultPath}) {
-      const result = await remote.dialog.showOpenDialog({
+      const result = await electronIpcClient.send('showOpenDialog', {
         defaultPath,
         properties: ['openFile'],
         filters: filter ? [filter] : undefined,
@@ -93,8 +81,8 @@ export function initializeElectron() {
       return result.filePaths?.[0];
     },
     showSelectDirectoryDialog(defaultPath = path.resolve('/')) {
-      return remote.dialog
-        .showOpenDialog({
+      return electronIpcClient
+        .send('showOpenDialog', {
           properties: ['openDirectory'],
           defaultPath,
         })
@@ -111,28 +99,48 @@ export function initializeElectron() {
           return undefined;
         });
     },
-    async importFile({defaultPath, extensions} = {}) {
-      const {filePaths} = await remote.dialog.showOpenDialog({
+    importFile: (async ({
+      defaultPath,
+      extensions,
+      title,
+      encoding = 'utf-8',
+      multi,
+    } = {}) => {
+      let {filePaths} = await electronIpcClient.send('showOpenDialog', {
         defaultPath,
-        properties: ['openFile'],
+        properties: [
+          'openFile',
+          ...(multi ? (['multiSelections'] as const) : []),
+        ],
         filters: extensions ? [{extensions, name: ''}] : undefined,
+        title,
       });
 
       if (!filePaths.length) {
         return;
       }
 
-      const filePath = filePaths[0];
-      const fileName = path.basename(filePath);
+      if (!multi) {
+        filePaths = [filePaths[0]];
+      }
 
-      const data = await fs.promises.readFile(filePath, {encoding: 'utf-8'});
-      return {
-        data,
-        name: fileName,
-      };
-    },
-    async exportFile(data, {defaultPath} = {}) {
-      const {filePath} = await remote.dialog.showSaveDialog({
+      const descriptors = await Promise.all(
+        filePaths.map(async (filePath) => {
+          const fileName = path.basename(filePath);
+
+          const data = await fs.promises.readFile(filePath, {encoding});
+          return {
+            data,
+            name: fileName,
+            path: filePath,
+          };
+        }),
+      );
+
+      return multi ? descriptors : descriptors[0];
+    }) as RenderHost['importFile'],
+    async exportFile(data, {defaultPath, encoding = 'utf-8'} = {}) {
+      const {filePath} = await electronIpcClient.send('showSaveDialog', {
         defaultPath,
       });
 
@@ -140,18 +148,27 @@ export function initializeElectron() {
         return;
       }
 
-      await fs.promises.writeFile(filePath, data);
+      await fs.promises.writeFile(filePath, data, {encoding});
+      return filePath;
+    },
+    async exportFileBinary(data, {defaultPath} = {}) {
+      const {filePath} = await electronIpcClient.send('showSaveDialog', {
+        defaultPath,
+      });
+
+      if (!filePath) {
+        return;
+      }
+
+      await fs.promises.writeFile(filePath, data, {encoding: 'binary'});
       return filePath;
     },
     openLink(url: string) {
       shell.openExternal(url);
     },
-    registerShortcut(shortcut, callback) {
-      remote.globalShortcut.register(shortcut, callback);
-      return () => remote.globalShortcut.unregister(shortcut);
-    },
     hasFocus() {
-      return remote.getCurrentWindow().isFocused();
+      // eslint-disable-next-line node/no-sync
+      return electronIpcClient.sendSync('getCurrentWindowState').isFocused;
     },
     onIpcEvent(event, callback) {
       ipcRenderer.on(event, (_ev, ...args: any[]) => {
@@ -162,42 +179,58 @@ export function initializeElectron() {
       ipcRenderer.send(event, ...args);
     },
     shouldUseDarkColors() {
-      return remote.nativeTheme.shouldUseDarkColors;
+      return electronTheme.shouldUseDarkColors;
     },
-    restartFlipper() {
-      restart();
+    restartFlipper(update: boolean = false) {
+      restart(update);
     },
-    env: process.env,
-    paths: {
-      appPath: app.getAppPath(),
-      homePath: app.getPath('home'),
-      execPath,
-      staticPath: getStaticDir(),
-      tempPath: app.getPath('temp'),
-      desktopPath: app.getPath('desktop'),
+    serverConfig: flipperServerConfig,
+    GK(gatekeeper) {
+      return flipperServerConfig.gatekeepers[gatekeeper] ?? false;
     },
-    loadDefaultPlugins: getDefaultPluginsIndex,
-  };
+    flipperServer,
+    async requirePlugin(path): Promise<{plugin: any; css?: string}> {
+      const plugin = electronRequire(path);
+      /**
+       * Check if the plugin includes a bundled css. If so,
+       * load its content too.
+       */
+      const idx = path.lastIndexOf('.');
+      const cssPath = path.substring(0, idx < 0 ? path.length : idx) + '.css';
+      try {
+        await fs.promises.access(cssPath);
 
-  setupMenuBar();
-}
+        const buffer = await fs.promises.readFile(cssPath, {encoding: 'utf-8'});
+        const css = buffer.toString();
 
-function getDefaultPluginsIndex() {
-  // eslint-disable-next-line import/no-unresolved
-  const index = require('../defaultPlugins');
-  return index.default || index;
-}
+        return {plugin, css};
+      } catch (e) {}
 
-function getStaticDir() {
-  let _staticPath = path.resolve(__dirname, '..', '..', '..', 'static');
-  if (fs.existsSync(_staticPath)) {
-    return _staticPath;
-  }
-  if (remote && fs.existsSync(remote.app.getAppPath())) {
-    _staticPath = path.join(remote.app.getAppPath());
-  }
-  if (!fs.existsSync(_staticPath)) {
-    throw new Error('Static path does not exist: ' + _staticPath);
-  }
-  return _staticPath;
+      return {plugin};
+    },
+    getStaticResourceUrl(relativePath): string {
+      return (
+        'file://' +
+        path.resolve(flipperServerConfig.paths.staticPath, relativePath)
+      );
+    },
+    getLocalIconUrl(icon: Icon, url: string): string {
+      return getLocalIconUrl(
+        icon,
+        url,
+        flipperServerConfig.paths.staticPath,
+        !flipperServerConfig.environmentInfo.isProduction,
+      );
+    },
+    unloadModule(path: string) {
+      const resolvedPath = electronRequire.resolve(path);
+      if (!resolvedPath || !electronRequire.cache[resolvedPath]) {
+        return;
+      }
+      delete electronRequire.cache[resolvedPath];
+    },
+    getPercentCPUUsage() {
+      return getCPUUsage().percentCPUUsage;
+    },
+  } as RenderHost;
 }

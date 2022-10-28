@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,14 +17,14 @@ import WebSocket, {
 import {createServer as createHttpsServer} from 'https';
 import {createServer as createHttpServer} from 'http';
 import querystring from 'querystring';
-import {ClientQuery} from 'flipper-common';
+import {ClientQuery, UnableToExtractClientQueryError} from 'flipper-common';
 import {
   assertNotNull,
   parseClientQuery,
   parseMessageToJson,
   verifyClientQueryComesFromCertExchangeSupportedOS,
 } from './Utilities';
-import {SecureServerConfig} from '../utils/CertificateProvider';
+import {SecureServerConfig} from '../utils/certificateUtils';
 import {Server} from 'net';
 import {serializeError} from 'serialize-error';
 import {WSCloseCode} from '../utils/WSCloseCode';
@@ -34,6 +34,10 @@ export interface ConnectionCtx {
   ws: WebSocket;
   request: IncomingMessage;
 }
+
+// based on https://github.com/websockets/ws/blob/master/lib/websocket-server.js#L40,
+// exposed to share with socket.io defaults
+export const WEBSOCKET_MAX_MESSAGE_SIZE = 100 * 1024 * 1024;
 
 /**
  * It serves as a base class for WebSocket based servers. It delegates the 'connection'
@@ -52,13 +56,12 @@ class ServerWebSocket extends ServerAdapter {
       const wsServer = new WSServer({
         server,
         verifyClient: this.verifyClient(),
+        maxPayload: WEBSOCKET_MAX_MESSAGE_SIZE,
       });
 
       // We do not need to listen to http server's `error` because it is propagated to WS
       // https://github.com/websockets/ws/blob/a3a22e4ed39c1a3be8e727e9c630dd440edc61dd/lib/websocket-server.js#L109
       const onConnectionError = (error: Error) => {
-        console.error(`[conn] Unable to start server at port ${port}`, error);
-        this.listener.onError(error);
         reject(
           new Error(
             `Unable to start server at port ${port} due to ${JSON.stringify(
@@ -98,14 +101,22 @@ class ServerWebSocket extends ServerAdapter {
         try {
           this.onConnection(ws, request);
         } catch (error) {
+          // TODO: Investigate if we need to close the socket in the `error` listener
+          // DRI: @aigoncharov
+          ws.close(WSCloseCode.InternalError);
+
+          if (error instanceof UnableToExtractClientQueryError) {
+            // If we are unable to extract the client query, do not emit an error.
+            // It cannot be determined if the client is legitimately trying to establish
+            // a connection with Flipper or some other process is trying to connect to
+            // the port currently used by Flipper.
+            return;
+          }
           // If an exception is thrown, an `error` event is not emitted automatically.
           // We need to explicitly handle the error and emit an error manually.
           // If we leave it unhanled, the process just dies
           // https://replit.com/@aigoncharov/WS-error-handling#index.js
           ws.emit('error', error);
-          // TODO: Investigate if we need to close the socket in the `error` listener
-          // DRI: @aigoncharov
-          ws.close(WSCloseCode.InternalError);
         }
       },
     );
@@ -158,15 +169,18 @@ class ServerWebSocket extends ServerAdapter {
     this.handleClientQuery(ctx);
     this.handleConnectionAttempt(ctx);
 
-    ws.on('message', async (message: unknown) => {
+    ws.on('message', async (message: WebSocket.RawData) => {
+      const messageString = message.toString();
       try {
-        const parsedMessage = this.handleMessageDeserialization(message);
+        const parsedMessage = this.handleMessageDeserialization(messageString);
         // Successful deserialization is a proof that the message is a string
-        this.handleMessage(ctx, parsedMessage, message as string);
+        this.handleMessage(ctx, parsedMessage, messageString);
       } catch (error) {
-        // See the reasoning in the error handler for a `connection` event
-        ws.emit('error', error);
-        ws.close(WSCloseCode.InternalError);
+        // If handling an individual message failes, we don't necessarily kill the connection,
+        // all other plugins might still be working correctly. So let's just report it.
+        // This avoids ping-ponging connections if an individual plugin sends garbage (e.g. T129428800)
+        // or throws an error when handling messages
+        console.error('Failed to handle message', messageString, error);
       }
     });
   }
@@ -178,10 +192,11 @@ class ServerWebSocket extends ServerAdapter {
     const clientQuery = this.parseClientQuery(query);
 
     if (!clientQuery) {
-      console.error(
+      console.warn(
         '[conn] Unable to extract the client query from the request URL.',
+        request.url,
       );
-      throw new Error(
+      throw new UnableToExtractClientQueryError(
         '[conn] Unable to extract the client query from the request URL.',
       );
     }

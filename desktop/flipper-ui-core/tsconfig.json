@@ -4,23 +4,19 @@
     "outDir": "lib",
     "rootDir": "src",
     "esModuleInterop": true,
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "lib": ["dom", "es2019"],
+    "types": ["react/next", "react-dom/next", "../types/ReactDebounceRender", "../types/flipperGlobals"]
   },
   "references": [
-    {
-      "path": "../doctor"
-    },
     {
       "path": "../flipper-common"
     },
     {
+      "path": "../flipper-frontend-core"
+    },
+    {
       "path": "../flipper-plugin"
-    },
-    {
-      "path": "../flipper-server-core"
-    },
-    {
-      "path": "../plugin-lib"
     },
     {
       "path": "../test-utils"

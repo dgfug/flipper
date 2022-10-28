@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,16 +11,17 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.2.2'
-        classpath 'com.vanniktech:gradle-maven-publish-plugin:0.18.0'
+        classpath 'com.android.tools.build:gradle:7.3.0'
+        classpath 'com.vanniktech:gradle-maven-publish-plugin:0.22.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$KOTLIN_VERSION"
-        classpath "org.jetbrains.dokka:dokka-gradle-plugin:1.5.31"
+        classpath "org.jetbrains.dokka:dokka-gradle-plugin:1.7.10"
+        classpath "org.jetbrains.kotlin:kotlin-serialization:$KOTLIN_VERSION"
     }
 }
 
 plugins {
-    id 'de.undercouch.download' version '4.1.2'
-    id 'com.github.ben-manes.versions' version '0.39.0'
+    id 'de.undercouch.download' version '5.2.1'
+    id 'com.github.ben-manes.versions' version '0.42.0'
 }
 
 ext.isSnapshot = { VERSION_NAME.endsWith('-SNAPSHOT') }
@@ -31,7 +32,6 @@ subprojects {
         google()
         mavenLocal()
         mavenCentral()
-        jcenter()
 
         if (isSnapshot()) {
             maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
@@ -46,32 +46,38 @@ subprojects {
 
 ext {
     minSdkVersion = 15
-    targetSdkVersion = 30
-    compileSdkVersion = 30
-    buildToolsVersion = '30.0.2'
+    targetSdkVersion = 31
+    compileSdkVersion = 31
+    buildToolsVersion = '30.0.3'
     ndkVersion = '23.0.7599858'
 }
 
 ext.deps = [
+        // Kotlin support
+        kotlinStdLibrary   : "org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION",
+        kotlinCoroutinesAndroid : "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4",
         // Android support
         supportAnnotations : "androidx.annotation:annotation:$ANDROIDX_VERSION",
         supportAppCompat   : "androidx.appcompat:appcompat:$ANDROIDX_VERSION",
         supportCoreUi      : "androidx.legacy:legacy-support-core-ui:$ANDROIDX_VERSION",
         supportRecyclerView: "androidx.recyclerview:recyclerview:$ANDROIDX_VERSION",
-        supportConstraintLayout: "androidx.constraintlayout:constraintlayout:2.1.1",
-        supportSqlite      : "androidx.sqlite:sqlite-framework:2.1.0",
+        supportConstraintLayout: "androidx.constraintlayout:constraintlayout:2.1.4",
+        supportSqlite      : "androidx.sqlite:sqlite-framework:2.2.0",
         supportEspresso    : 'androidx.test.espresso:espresso-core:3.4.0',
         supportEspressoIntents : 'androidx.test.espresso:espresso-intents:3.4.0',
         supportTestRunner  : 'androidx.test:runner:1.4.0',
         // Arch
         archPaging         : 'android.arch.paging:runtime:1.0.1',
         // First-party
-        soloader           : 'com.facebook.soloader:soloader:0.10.3',
-        fbjni              : 'com.facebook.fbjni:fbjni:0.2.2',
-        screenshot         : 'com.facebook.testing.screenshot:core:0.14.0',
+        soloader           : 'com.facebook.soloader:soloader:0.10.4',
+        fbjni              : 'com.facebook.fbjni:fbjni:0.3.0',
+        screenshot         : 'com.facebook.testing.screenshot:core:0.15.0',
         boltsTasks         : 'com.parse.bolts:bolts-tasks:1.4.0',
-        websocket          : 'org.java-websocket:Java-WebSocket:1.5.2',
+        // Third-party
+        websocket          : 'org.java-websocket:Java-WebSocket:1.5.3',
+        openssl            : 'com.android.ndk.thirdparty:openssl:1.1.1l-beta-1',
         // Annotations
+        kotlinxSerializationJson :  "org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1",
         jsr305             : 'com.google.code.findbugs:jsr305:3.0.2',
         inferAnnotations   : 'com.facebook.infer.annotation:infer-annotation:0.18.0',
         proguardAnnotations: 'com.facebook.yoga:proguard-annotations:1.19.0',
@@ -91,14 +97,14 @@ ext.deps = [
         lithoTesting       : "com.facebook.litho:litho-testing:$LITHO_VERSION",
         // Debugging and testing
         guava              : 'com.google.guava:guava:23.0',
-        robolectric        : 'org.robolectric:robolectric:4.5.1',
+        robolectric        : 'org.robolectric:robolectric:4.9',
         junit              : 'junit:junit:4.13.2',
         hamcrest           : 'org.hamcrest:hamcrest-library:2.2',
-        mockito            : 'org.mockito:mockito-core:4.0.0',
-        okhttp3            : 'com.squareup.okhttp3:okhttp:4.9.2',
+        mockito            : 'org.mockito:mockito-core:4.8.1',
+        okhttp3            : 'com.squareup.okhttp3:okhttp:4.9.3',
         leakcanary         : 'com.squareup.leakcanary:leakcanary-android:1.6.3',
-        leakcanary2        : 'com.squareup.leakcanary:leakcanary-android:2.6',
-        protobuf           : 'com.google.protobuf:protobuf-java:3.19.1',
+        leakcanary2        : 'com.squareup.leakcanary:leakcanary-android:2.8.1',
+        protobuf           : 'com.google.protobuf:protobuf-java:3.21.8',
         testCore           : 'androidx.test:core:1.4.0',
         testRules          : 'androidx.test:rules:1.4.0',
         // Plugin dependencies

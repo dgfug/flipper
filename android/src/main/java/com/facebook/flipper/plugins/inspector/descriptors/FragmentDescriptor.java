@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 package com.facebook.flipper.plugins.inspector.descriptors;
 
 import android.app.Fragment;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.View;
 import com.facebook.flipper.core.FlipperDynamic;
@@ -106,6 +107,16 @@ public class FragmentDescriptor extends NodeDescriptor<Fragment> {
 
     final NodeDescriptor descriptor = descriptorForClass(View.class);
     descriptor.setHighlighted(node.getView(), selected, isAlignmentMode);
+  }
+
+  @Override
+  public Bitmap getSnapshot(Fragment node, boolean includeChildren) throws Exception {
+    if (node.getView() == null) {
+      return null;
+    }
+
+    final NodeDescriptor descriptor = descriptorForClass(View.class);
+    return descriptor.getSnapshot(node.getView(), includeChildren);
   }
 
   @Override

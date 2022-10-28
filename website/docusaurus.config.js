@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,26 +7,33 @@
  * @format
  */
 
-// start-import-example
-const {fbContent, fbInternalOnly} = require('internaldocs-fb-helpers');
-// end-import-example
+const {fbContent, fbInternalOnly} = require('docusaurus-plugin-internaldocs-fb/internal');
 
 const repoUrl = 'https://github.com/facebook/flipper';
+const siteUrl = fbContent({
+    internal: 'https://flipper.thefacebook.com/',
+    external: 'https://fbflipper.com/',
+});
 const siteConfig = {
   title: fbContent({
     internal: 'Flipper @FB',
     external: 'Flipper',
   }),
   tagline: 'Extensible mobile app debugging',
-  url: fbContent({
-    internal: 'https://flipper.thefacebook.com/',
-    external: 'https://fbflipper.com/',
-  }),
+  url: siteUrl,
   baseUrl: '/',
   trailingSlash: true,
   projectName: 'flipper',
   // TODO: T69061026 enable once sandy docs are complete: external_domain: 'fbflipper.com',
   themeConfig: {
+    announcementBar: {
+      id: 'support_ukraine',
+      content:
+        'Support Ukraine 🇺🇦 <a target="_blank" rel="noopener noreferrer" href="https://opensource.fb.com/support-ukraine"> Help Provide Humanitarian Aid to Ukraine</a>.',
+      backgroundColor: '#20232a',
+      textColor: '#fff',
+      isCloseable: false,
+    },
     navbar: {
       title: fbContent({
         internal: 'Flipper @FB',
@@ -38,12 +45,12 @@ const siteConfig = {
       },
       items: [
         {
-          to: 'docs/features/index',
+          to: 'docs/features',
           label: 'Features',
           position: 'right',
         },
         {
-          to: 'docs/getting-started/index',
+          to: 'docs/getting-started',
           label: 'Setup',
           position: 'right',
         },
@@ -53,7 +60,7 @@ const siteConfig = {
           position: 'right',
         },
         {
-          to: 'docs/internals/index',
+          to: 'docs/internals',
           label: 'Under the Hood',
           position: 'right',
         },
@@ -80,7 +87,7 @@ const siteConfig = {
           items: [
             {
               label: 'Getting Started',
-              to: 'docs/getting-started/index',
+              to: 'docs/getting-started',
             },
             {
               label: 'Plugin Creation Tutorial',
@@ -93,7 +100,7 @@ const siteConfig = {
           items: [
             {
               label: 'Core Plugins',
-              to: 'docs/features/index',
+              to: 'docs/features',
             },
             {
               label: 'Community Plugins',
@@ -129,7 +136,7 @@ const siteConfig = {
           ],
         },
       ],
-      copyright: 'Copyright © ' + new Date().getFullYear() + ' Facebook',
+      copyright: 'Copyright © ' + new Date().getFullYear() + ' Meta Platforms, Inc',
       logo: {
         alt: 'Flipper Mascot',
         src: 'img/mascot.png',
@@ -138,6 +145,7 @@ const siteConfig = {
     algolia: fbContent({
       internal: undefined,
       external: {
+        appId: 'OFCNCOG2CU',
         apiKey: '2df980e7ffc95c19552790f7cad32666',
         indexName: 'fbflipper',
         algoliaOptions: {
@@ -160,8 +168,8 @@ const siteConfig = {
   scripts: [
     'https://buttons.github.io/buttons.js',
     'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.0/clipboard.min.js',
-    '/js/code-blocks-buttons.js',
-    '/js/google-analytics.js',
+    `${siteUrl}js/code-blocks-buttons.js`,
+    `${siteUrl}js/google-analytics.js`,
   ],
   stylesheets: [],
   // start_config_example
@@ -210,7 +218,7 @@ const siteConfig = {
       {
         redirects: [
           {
-            to: '/docs/troubleshooting',
+            to: '/docs/getting-started/troubleshooting',
             from: ['/docs/fb/troubleshooting'],
           },
           {
@@ -237,7 +245,7 @@ const siteConfig = {
             from: ['/docs/fb/developmentworkflow'],
           },
           {
-            to: '/docs/getting-started/index',
+            to: '/docs/getting-started',
             from: ['/docs/fb/Help-Updating-Flipper'],
           },
           {
@@ -255,12 +263,12 @@ const siteConfig = {
             from: ['/docs/fb/using-gatekeepers'],
           },
           {
-            to: '/docs/getting-started/index',
+            to: '/docs/getting-started',
             from: ['/docs/fb/using-flipper-at-facebook'],
           },
           {
-            to: '/docs/getting-started/index',
-            from: ['/docs/fb/index'],
+            to: '/docs/getting-started',
+            from: ['/docs/fb'],
           },
           {
             from: ['/docs/features/network-plugin'],
@@ -361,7 +369,16 @@ const siteConfig = {
               to: '/docs/features/plugins/mobile-config',
             },
           ]),
-        ],
+        ].map(x => ({
+          ...x,
+          from: x.from.reduce(
+            (acc, href) => {
+              acc.push(href, `${href}/index`);
+              return acc;
+            },
+            [],
+          )}),
+        ),
       },
     ],
   ],

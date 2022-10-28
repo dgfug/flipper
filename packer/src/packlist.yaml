@@ -1,5 +1,6 @@
 mac:
   mode: exact
+  basedir: mac
   files:
     frameworks:
       - Flipper.app/Contents/Frameworks/
@@ -11,6 +12,7 @@ mac:
 
 linux:
   mode: glob
+  basedir: linux-unpacked
   files:
     frameworks:
       - '!resources/'
@@ -20,9 +22,35 @@ linux:
 
 windows:
   mode: glob
+  basedir: win-unpacked
   files:
     frameworks:
       - '!resources/'
     core:
       - '!*'
       - resources
+
+server-mac-x64:
+  mode: exact
+  basedir: flipper-server-mac-x64
+  files:
+    frameworks:
+      - Flipper.app/Contents/MacOS/
+      - Flipper.app/Contents/PkgInfo
+    core:
+      - Flipper.app/Contents/Resources
+      - Flipper.app/Contents/Info.plist
+
+server-linux:
+  mode: glob
+  basedir: flipper-server-linux
+  files:
+    frameworks:
+      - '!*'
+      - node
+    core:
+      - '!node'
+      - '!static'
+    static:
+      - '!*'
+      - static

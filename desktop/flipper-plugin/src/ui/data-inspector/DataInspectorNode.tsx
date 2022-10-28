@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,6 +17,8 @@ import {
   useCallback,
   createContext,
   useContext,
+  ReactElement,
+  SyntheticEvent,
 } from 'react';
 import styled from '@emotion/styled';
 import DataPreview, {DataValueExtractor, InspectorName} from './DataPreview';
@@ -24,8 +26,8 @@ import {getSortedKeys} from './utils';
 import React from 'react';
 import {useHighlighter, HighlightManager} from '../Highlight';
 import {Dropdown, Menu, Tooltip} from 'antd';
-import {tryGetFlipperLibImplementation} from '../../plugin/FlipperLib';
-import {safeStringify} from '../../utils/safeStringify';
+import {_tryGetFlipperLibImplementation} from 'flipper-plugin-core';
+import {safeStringify} from 'flipper-plugin-core';
 import {useInUnitTest} from '../../utils/useInUnitTest';
 import {theme} from '../theme';
 
@@ -35,18 +37,21 @@ export const RootDataContext = createContext<() => any>(() => ({}));
 
 export const contextMenuTrigger = ['contextMenu' as const];
 
-const BaseContainer = styled.div<{depth?: number; disabled?: boolean}>(
-  (props) => ({
-    fontFamily: 'Menlo, monospace',
-    fontSize: 11,
-    lineHeight: '17px',
-    filter: props.disabled ? 'grayscale(100%)' : '',
-    margin: props.depth === 0 ? '7.5px 0' : '0',
-    paddingLeft: 10,
-    userSelect: 'text',
-    width: '100%',
-  }),
-);
+const BaseContainer = styled.div<{
+  depth?: number;
+  disabled?: boolean;
+  hovered: boolean;
+}>((props) => ({
+  fontFamily: 'Menlo, monospace',
+  fontSize: 11,
+  lineHeight: '17px',
+  filter: props.disabled ? 'grayscale(100%)' : '',
+  margin: props.depth === 0 ? '7.5px 0' : '0',
+  paddingLeft: 10,
+  userSelect: 'text',
+  width: '100%',
+  backgroundColor: props.hovered ? theme.selectionBackgroundColor : '',
+}));
 BaseContainer.displayName = 'DataInspector:BaseContainer';
 
 const RecursiveBaseWrapper = styled.span({
@@ -170,6 +175,15 @@ type DataInspectorProps = {
    * Object of properties that will have tooltips
    */
   tooltips?: any;
+  additionalContextMenuItems?: (
+    parentPath: string[],
+    value: any,
+    name?: string,
+  ) => ReactElement[];
+
+  hoveredNodePath?: string;
+
+  setHoveredNodePath: (path: string) => void;
 };
 
 const defaultValueExtractor: DataValueExtractor = (value: any) => {
@@ -300,6 +314,9 @@ export const DataInspectorNode: React.FC<DataInspectorProps> = memo(
     collapsed,
     tooltips,
     setValue: setValueProp,
+    additionalContextMenuItems,
+    hoveredNodePath,
+    setHoveredNodePath,
   }) {
     const highlighter = useHighlighter();
     const getRoot = useContext(RootDataContext);
@@ -453,6 +470,8 @@ export const DataInspectorNode: React.FC<DataInspectorProps> = memo(
           const metaKey = key + index;
           const dataInspectorNode = (
             <DataInspectorNode
+              setHoveredNodePath={setHoveredNodePath}
+              hoveredNodePath={hoveredNodePath}
               parentAncestry={ancestry}
               extractValue={extractValue}
               setValue={setValue}
@@ -469,6 +488,7 @@ export const DataInspectorNode: React.FC<DataInspectorProps> = memo(
               data={metadata.data}
               diff={metadata.diff}
               tooltips={tooltips}
+              additionalContextMenuItems={additionalContextMenuItems}
             />
           );
 
@@ -563,9 +583,16 @@ export const DataInspectorNode: React.FC<DataInspectorProps> = memo(
     }
 
     function getContextMenu() {
-      const lib = tryGetFlipperLibImplementation();
+      const lib = _tryGetFlipperLibImplementation();
+      const extraItems = additionalContextMenuItems
+        ? [
+            additionalContextMenuItems(parentPath, value, name),
+            <Menu.Divider key="extradivider" />,
+          ]
+        : [];
       return (
         <Menu>
+          {extraItems}
           <Menu.Item
             key="copyClipboard"
             onClick={() => {
@@ -603,9 +630,19 @@ export const DataInspectorNode: React.FC<DataInspectorProps> = memo(
       );
     }
 
+    const nodePath = path.join('.');
+
     return (
       <Dropdown overlay={getContextMenu} trigger={contextMenuTrigger}>
         <BaseContainer
+          onContextMenu={stopPropagation}
+          hovered={hoveredNodePath === nodePath}
+          onMouseEnter={() => {
+            setHoveredNodePath(nodePath);
+          }}
+          onMouseLeave={() => {
+            setHoveredNodePath(parentPath.join('.'));
+          }}
           depth={depth}
           disabled={!!setValueProp && !!setValue === false}>
           <PropertyContainer onClick={isExpandable ? handleClick : undefined}>
@@ -681,6 +718,18 @@ function dataInspectorPropsAreEqual(
     }
   }
 
+  const nodePath = (
+    props.name === undefined
+      ? props.parentPath
+      : props.parentPath.concat([props.name])
+  ).join('.');
+
+  //if the node is a prefix then we of the hovered path(s) then we *should* render this branch of the tree
+  //Otherwise we don't need to rerender since this node is not changing hover state
+  const nodePathIsPrefixOfCurrentOrNextHoverPath =
+    nextProps.hoveredNodePath?.startsWith(nodePath) ||
+    props.hoveredNodePath?.startsWith(nodePath);
+
   // basic equality checks for the rest
   return (
     nextProps.data === props.data &&
@@ -692,7 +741,8 @@ function dataInspectorPropsAreEqual(
     nextProps.onDelete === props.onDelete &&
     nextProps.setValue === props.setValue &&
     nextProps.collapsed === props.collapsed &&
-    nextProps.expandRoot === props.expandRoot
+    nextProps.expandRoot === props.expandRoot &&
+    !nodePathIsPrefixOfCurrentOrNextHoverPath
   );
 }
 
@@ -700,4 +750,9 @@ function isValueExpandable(data: any) {
   return (
     typeof data === 'object' && data !== null && Object.keys(data).length > 0
   );
+}
+
+function stopPropagation(e: SyntheticEvent) {
+  //without this the parent element will receive the context menu event and multiple context menus overlap
+  e.stopPropagation();
 }

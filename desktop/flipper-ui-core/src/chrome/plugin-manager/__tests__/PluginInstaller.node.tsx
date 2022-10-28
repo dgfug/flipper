@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,19 +7,22 @@
  * @format
  */
 
-jest.mock('flipper-plugin-lib');
-
 import {default as PluginInstaller} from '../PluginInstaller';
 import React from 'react';
 import {render, waitFor} from '@testing-library/react';
 import configureStore from 'redux-mock-store';
 import {Provider} from 'react-redux';
-import type {PluginDetails} from 'flipper-plugin-lib';
-import {getUpdatablePlugins, UpdatablePluginDetails} from 'flipper-plugin-lib';
+import type {PluginDetails, UpdatablePluginDetails} from 'flipper-common';
 import {Store} from '../../../reducers';
-import {mocked} from 'ts-jest/utils';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
-const getUpdatablePluginsMock = mocked(getUpdatablePlugins);
+let getUpdatablePluginsMock: jest.Mock<any, any>;
+
+beforeEach(() => {
+  // flipperServer get resets before each test, no need to do so explicitly
+  getUpdatablePluginsMock = getRenderHostInstance().flipperServer!.exec =
+    jest.fn();
+});
 
 function getStore(installedPlugins: PluginDetails[] = []): Store {
   return configureStore([])({
@@ -40,7 +43,6 @@ const samplePluginDetails1: UpdatablePluginDetails = {
   id: 'Hello',
   title: 'Hello',
   description: 'World?',
-  isBundled: false,
   isActivatable: true,
   updateStatus: {
     kind: 'not-installed',
@@ -60,7 +62,6 @@ const samplePluginDetails2: UpdatablePluginDetails = {
   id: 'World',
   title: 'World',
   description: 'Hello?',
-  isBundled: false,
   isActivatable: true,
   updateStatus: {
     kind: 'not-installed',
@@ -69,10 +70,6 @@ const samplePluginDetails2: UpdatablePluginDetails = {
 };
 
 const SEARCH_RESULTS = [samplePluginDetails1, samplePluginDetails2];
-
-afterEach(() => {
-  getUpdatablePluginsMock.mockClear();
-});
 
 test('load PluginInstaller list', async () => {
   getUpdatablePluginsMock.mockReturnValue(Promise.resolve(SEARCH_RESULTS));

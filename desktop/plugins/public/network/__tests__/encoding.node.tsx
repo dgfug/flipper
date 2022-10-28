@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,12 +8,11 @@
  */
 
 import {readFile} from 'fs';
-import path from 'path';
 import {decodeBody, isTextual} from '../utils';
 import {ResponseInfo} from '../types';
 import {promisify} from 'util';
 import {readFileSync} from 'fs';
-import {TestUtils} from 'flipper-plugin';
+import {TestUtils, path} from 'flipper-plugin';
 import * as NetworkPlugin from '../index';
 
 async function createMockResponse(

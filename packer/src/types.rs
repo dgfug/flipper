@@ -1,27 +1,34 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-use clap::arg_enum;
-use std::fmt::{self, Display};
+use std::fmt;
+use std::fmt::Display;
+use std::str;
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize)]
-    #[serde(rename_all = "lowercase")]
-    pub enum Platform {
-        Mac,
-        Linux,
-        Windows
+#[derive(Eq, PartialEq, Debug, PartialOrd, Ord, Clone, serde::Deserialize)]
+pub struct Platform(pub String);
+
+impl str::FromStr for Platform {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string()))
+    }
+}
+
+impl Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
 #[derive(
     Debug,
     Clone,
-    Copy,
     PartialEq,
     Eq,
     PartialOrd,
@@ -30,9 +37,13 @@ arg_enum! {
     serde::Serialize
 )]
 #[serde(rename_all = "lowercase")]
-pub enum PackType {
-    Frameworks,
-    Core,
+pub struct PackType(String);
+
+#[cfg(test)]
+impl PackType {
+    pub fn new(s: &str) -> Self {
+        Self(s.to_string())
+    }
 }
 
 #[derive(
@@ -57,10 +68,7 @@ pub enum PackMode {
 
 impl Display for PackType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::Frameworks => write!(f, "frameworks"),
-            Self::Core => write!(f, "core"),
-        }
+        write!(f, "{}", self.0)
     }
 }
 

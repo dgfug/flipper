@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,13 +10,19 @@
 import type {DataTableColumn} from './DataTable';
 import {Percentage} from '../../utils/widthUtils';
 import {MutableRefObject, Reducer} from 'react';
-import {DataSource, DataSourceVirtualizer} from '../../data-source/index';
+import {DataSourceVirtualizer} from '../../data-source/index';
 import produce, {castDraft, immerable, original} from 'immer';
+import {theme} from '../theme';
+import {DataSource, _DataSourceView} from 'flipper-plugin-core';
 
 export type OnColumnResize = (id: string, size: number | Percentage) => void;
 export type Sorting<T = any> = {
   key: keyof T;
   direction: Exclude<SortDirection, undefined>;
+};
+export type SearchHighlightSetting = {
+  highlightEnabled: boolean;
+  color: string;
 };
 
 export type SortDirection = 'asc' | 'desc' | undefined;
@@ -28,18 +34,26 @@ const emptySelection: Selection = {
   current: -1,
 };
 
+const MAX_HISTORY = 1000;
+
 type PersistedState = {
   /** Active search value */
   search: string;
   useRegex: boolean;
+  filterSearchHistory: boolean;
   /** current selection, describes the index index in the datasources's current output (not window!) */
   selection: {current: number; items: number[]};
   /** The currently applicable sorting, if any */
   sorting: Sorting | undefined;
   /** The default columns, but normalized */
-  columns: Pick<DataTableColumn, 'key' | 'width' | 'filters' | 'visible'>[];
+  columns: Pick<
+    DataTableColumn,
+    'key' | 'width' | 'filters' | 'visible' | 'inversed'
+  >[];
   scrollOffset: number;
   autoScroll: boolean;
+  searchHistory: string[];
+  highlightSearchSetting: SearchHighlightSetting;
 };
 
 type Action<Name extends string, Args = {}> = {type: Name} & Args;
@@ -47,13 +61,15 @@ type Action<Name extends string, Args = {}> = {type: Name} & Args;
 type DataManagerActions<T> =
   /** Reset the current table preferences, including column widths an visibility, back to the default */
   | Action<'reset'>
+  /** Disable the current column filters */
+  | Action<'resetFilters'>
   /** Resizes the column with the given key to the given width */
   | Action<'resizeColumn', {column: keyof T; width: number | Percentage}>
   /** Sort by the given column. This toggles statefully between ascending, descending, none (insertion order of the data source) */
   | Action<'sortColumn', {column: keyof T; direction: SortDirection}>
   /** Show / hide the given column */
   | Action<'toggleColumnVisibility', {column: keyof T}>
-  | Action<'setSearchValue', {value: string}>
+  | Action<'setSearchValue', {value: string; addToHistory: boolean}>
   | Action<
       'selectItem',
       {
@@ -90,10 +106,19 @@ type DataManagerActions<T> =
   | Action<'appliedInitialScroll'>
   | Action<'toggleUseRegex'>
   | Action<'toggleAutoScroll'>
-  | Action<'setAutoScroll', {autoScroll: boolean}>;
+  | Action<'setAutoScroll', {autoScroll: boolean}>
+  | Action<'toggleSearchValue'>
+  | Action<'clearSearchHistory'>
+  | Action<'toggleHighlightSearch'>
+  | Action<'setSearchHighlightColor', {color: string}>
+  | Action<'toggleFilterSearchHistory'>
+  | Action<'toggleSideBySide'>
+  | Action<'showSearchDropdown', {show: boolean}>
+  | Action<'setShowNumberedHistory', {showNumberedHistory: boolean}>;
 
 type DataManagerConfig<T> = {
   dataSource: DataSource<T, T[keyof T]>;
+  dataView: _DataSourceView<T, T[keyof T]>;
   defaultColumns: DataTableColumn<T>[];
   scope: string;
   onSelect: undefined | ((item: T | undefined, items: T[]) => void);
@@ -102,7 +127,7 @@ type DataManagerConfig<T> = {
   enablePersistSettings?: boolean;
 };
 
-type DataManagerState<T> = {
+export type DataManagerState<T> = {
   config: DataManagerConfig<T>;
   usesWrapping: boolean;
   storageKey: string;
@@ -110,9 +135,17 @@ type DataManagerState<T> = {
   columns: DataTableColumn[];
   sorting: Sorting<T> | undefined;
   selection: Selection;
-  searchValue: string;
   useRegex: boolean;
+  filterSearchHistory: boolean;
+  showSearchHistory: boolean;
+  showNumberedHistory: boolean;
   autoScroll: boolean;
+  searchValue: string;
+  /** Used to remember the record entry to lookup when user presses ctrl */
+  previousSearchValue: string;
+  searchHistory: string[];
+  highlightSearchSetting: SearchHighlightSetting;
+  sideBySide: boolean;
 };
 
 export type DataTableReducer<T> = Reducer<
@@ -132,6 +165,13 @@ export const dataTableManagerReducer = produce<
       draft.sorting = undefined;
       draft.searchValue = '';
       draft.selection = castDraft(emptySelection);
+      break;
+    }
+    case 'resetFilters': {
+      draft.columns.forEach((c) =>
+        c.filters?.forEach((f) => (f.enabled = false)),
+      );
+      draft.searchValue = '';
       break;
     }
     case 'resizeColumn': {
@@ -157,10 +197,40 @@ export const dataTableManagerReducer = produce<
     }
     case 'setSearchValue': {
       draft.searchValue = action.value;
+      draft.previousSearchValue = '';
+      if (
+        action.addToHistory &&
+        action.value &&
+        !draft.searchHistory.includes(action.value)
+      ) {
+        draft.searchHistory.unshift(action.value);
+        // FIFO if history too large
+        if (draft.searchHistory.length > MAX_HISTORY) {
+          draft.searchHistory.length = MAX_HISTORY;
+        }
+      }
+      break;
+    }
+    case 'toggleSearchValue': {
+      if (draft.searchValue) {
+        draft.previousSearchValue = draft.searchValue;
+        draft.searchValue = '';
+      } else {
+        draft.searchValue = draft.previousSearchValue;
+        draft.previousSearchValue = '';
+      }
+      break;
+    }
+    case 'clearSearchHistory': {
+      draft.searchHistory = [];
       break;
     }
     case 'toggleUseRegex': {
       draft.useRegex = !draft.useRegex;
+      break;
+    }
+    case 'toggleFilterSearchHistory': {
+      draft.filterSearchHistory = !draft.filterSearchHistory;
       break;
     }
     case 'selectItem': {
@@ -226,14 +296,14 @@ export const dataTableManagerReducer = produce<
     }
     case 'setColumnFilterFromSelection': {
       const items = getSelectedItems(
-        config.dataSource as DataSource<any>,
+        config.dataView as _DataSourceView<any, any>,
         draft.selection,
       );
       items.forEach((item, index) => {
         addColumnFilter(
           draft.columns,
           action.column,
-          (item as any)[action.column],
+          getValueAtPath(item, String(action.column)),
           index === 0, // remove existing filters before adding the first
         );
       });
@@ -251,6 +321,29 @@ export const dataTableManagerReducer = produce<
       draft.autoScroll = action.autoScroll;
       break;
     }
+    case 'toggleHighlightSearch': {
+      draft.highlightSearchSetting.highlightEnabled =
+        !draft.highlightSearchSetting.highlightEnabled;
+      break;
+    }
+    case 'setSearchHighlightColor': {
+      if (draft.highlightSearchSetting.color !== action.color) {
+        draft.highlightSearchSetting.color = action.color;
+      }
+      break;
+    }
+    case 'toggleSideBySide': {
+      draft.sideBySide = !draft.sideBySide;
+      break;
+    }
+    case 'showSearchDropdown': {
+      draft.showSearchHistory = action.show;
+      break;
+    }
+    case 'setShowNumberedHistory': {
+      draft.showNumberedHistory = action.showNumberedHistory;
+      break;
+    }
     default: {
       throw new Error('Unknown action ' + (action as any).type);
     }
@@ -262,6 +355,7 @@ export const dataTableManagerReducer = produce<
  */
 export type DataTableManager<T> = {
   reset(): void;
+  resetFilters(): void;
   selectItem(
     index: number | ((currentSelection: number) => number),
     addToSelection?: boolean,
@@ -278,18 +372,27 @@ export type DataTableManager<T> = {
   getSelectedItems(): readonly T[];
   toggleColumnVisibility(column: keyof T): void;
   sortColumn(column: keyof T, direction?: SortDirection): void;
-  setSearchValue(value: string): void;
-  dataSource: DataSource<T, T[keyof T]>;
+  setSearchValue(value: string, addToHistory?: boolean): void;
+  dataView: _DataSourceView<T, T[keyof T]>;
+  toggleSearchValue(): void;
+  toggleHighlightSearch(): void;
+  setSearchHighlightColor(color: string): void;
+  toggleSideBySide(): void;
+  showSearchDropdown(show: boolean): void;
+  setShowNumberedHistory(showNumberedHistory: boolean): void;
 };
 
 export function createDataTableManager<T>(
-  dataSource: DataSource<T, T[keyof T]>,
+  dataView: _DataSourceView<T, T[keyof T]>,
   dispatch: DataTableDispatch<T>,
   stateRef: MutableRefObject<DataManagerState<T>>,
 ): DataTableManager<T> {
   return {
     reset() {
       dispatch({type: 'reset'});
+    },
+    resetFilters() {
+      dispatch({type: 'resetFilters'});
     },
     selectItem(index: number, addToSelection = false, allowUnselect = false) {
       dispatch({
@@ -309,10 +412,10 @@ export function createDataTableManager<T>(
       dispatch({type: 'clearSelection'});
     },
     getSelectedItem() {
-      return getSelectedItem(dataSource, stateRef.current.selection);
+      return getSelectedItem(dataView, stateRef.current.selection);
     },
     getSelectedItems() {
-      return getSelectedItems(dataSource, stateRef.current.selection);
+      return getSelectedItems(dataView, stateRef.current.selection);
     },
     toggleColumnVisibility(column) {
       dispatch({type: 'toggleColumnVisibility', column});
@@ -320,16 +423,35 @@ export function createDataTableManager<T>(
     sortColumn(column, direction) {
       dispatch({type: 'sortColumn', column, direction});
     },
-    setSearchValue(value) {
-      dispatch({type: 'setSearchValue', value});
+    setSearchValue(value, addToHistory = false) {
+      dispatch({type: 'setSearchValue', value, addToHistory});
     },
-    dataSource,
+    toggleSearchValue() {
+      dispatch({type: 'toggleSearchValue'});
+    },
+    toggleHighlightSearch() {
+      dispatch({type: 'toggleHighlightSearch'});
+    },
+    setSearchHighlightColor(color) {
+      dispatch({type: 'setSearchHighlightColor', color});
+    },
+    toggleSideBySide() {
+      dispatch({type: 'toggleSideBySide'});
+    },
+    showSearchDropdown(show) {
+      dispatch({type: 'showSearchDropdown', show});
+    },
+    setShowNumberedHistory(showNumberedHistory) {
+      dispatch({type: 'setShowNumberedHistory', showNumberedHistory});
+    },
+    dataView,
   };
 }
 
 export function createInitialState<T>(
   config: DataManagerConfig<T>,
 ): DataManagerState<T> {
+  // by default a table is considered to be identical if plugins, and default column names are the same
   const storageKey = `${config.scope}:DataTable:${config.defaultColumns
     .map((c) => c.key)
     .join(',')}`;
@@ -363,8 +485,18 @@ export function createInitialState<T>(
         }
       : emptySelection,
     searchValue: prefs?.search ?? '',
+    previousSearchValue: '',
+    searchHistory: prefs?.searchHistory ?? [],
     useRegex: prefs?.useRegex ?? false,
+    filterSearchHistory: prefs?.filterSearchHistory ?? true,
     autoScroll: prefs?.autoScroll ?? config.autoScroll ?? false,
+    highlightSearchSetting: prefs?.highlightSearchSetting ?? {
+      highlightEnabled: false,
+      color: theme.searchHighlightBackground.yellow,
+    },
+    sideBySide: false,
+    showSearchHistory: false,
+    showNumberedHistory: false,
   };
   // @ts-ignore
   res.config[immerable] = false; // optimization: never proxy anything in config
@@ -400,21 +532,19 @@ function addColumnFilter<T>(
 }
 
 export function getSelectedItem<T>(
-  dataSource: DataSource<T, T[keyof T]>,
+  dataView: _DataSourceView<T, T[keyof T]>,
   selection: Selection,
 ): T | undefined {
-  return selection.current < 0
-    ? undefined
-    : dataSource.view.get(selection.current);
+  return selection.current < 0 ? undefined : dataView.get(selection.current);
 }
 
 export function getSelectedItems<T>(
-  dataSource: DataSource<T, T[keyof T]>,
+  dataView: _DataSourceView<T, T[keyof T]>,
   selection: Selection,
 ): T[] {
   return [...selection.items]
-    .sort()
-    .map((i) => dataSource.view.get(i))
+    .sort((a, b) => a - b) // https://stackoverflow.com/a/15765283/1983583
+    .map((i) => dataView.get(i))
     .filter(Boolean) as any[];
 }
 
@@ -428,6 +558,7 @@ export function savePreferences(
   const prefs: PersistedState = {
     search: state.searchValue,
     useRegex: state.useRegex,
+    filterSearchHistory: state.filterSearchHistory,
     selection: {
       current: state.selection.current,
       items: Array.from(state.selection.items),
@@ -438,9 +569,12 @@ export function savePreferences(
       width: c.width,
       filters: c.filters,
       visible: c.visible,
+      inversed: c.inversed,
     })),
     scrollOffset,
     autoScroll: state.autoScroll,
+    searchHistory: state.searchHistory,
+    highlightSearchSetting: state.highlightSearchSetting,
   };
   localStorage.setItem(state.storageKey, JSON.stringify(prefs));
 }
@@ -490,6 +624,26 @@ function computeInitialColumns(
   }));
 }
 
+/**
+ * A somewhat primitive and unsafe way to access nested fields an object.
+ * @param obj keys should only be strings
+ * @param keyPath dotted string path, e.g foo.bar
+ * @returns value at the key path
+ */
+
+export function getValueAtPath(obj: Record<string, any>, keyPath: string): any {
+  let res = obj;
+  for (const key of keyPath.split('.')) {
+    if (res == null) {
+      return null;
+    } else {
+      res = res[key];
+    }
+  }
+
+  return res;
+}
+
 export function computeDataTableFilter(
   searchValue: string,
   useRegex: boolean,
@@ -512,7 +666,10 @@ export function computeDataTableFilter(
     for (const column of filteringColumns) {
       const rowMatchesFilter = column.filters!.some(
         (f) =>
-          f.enabled && String(item[column.key]).toLowerCase().includes(f.value),
+          f.enabled &&
+          String(getValueAtPath(item, column.key))
+            .toLowerCase()
+            .includes(f.value),
       );
       if (column.inversed && rowMatchesFilter) {
         return false;
@@ -521,11 +678,18 @@ export function computeDataTableFilter(
         return false;
       }
     }
-    return Object.values(item).some((v) =>
-      searchRegex
-        ? searchRegex.test(String(v))
-        : String(v).toLowerCase().includes(searchString),
-    );
+    //free search all top level keys as well as any (nested) columns in the table
+    const nestedColumns = columns
+      .map((col) => col.key)
+      .filter((path) => path.includes('.'));
+    return [...Object.keys(item), ...nestedColumns]
+      .map((key) => getValueAtPath(item, key))
+      .filter((val) => typeof val !== 'object')
+      .some((v) => {
+        return searchRegex
+          ? searchRegex.test(String(v))
+          : String(v).toLowerCase().includes(searchString);
+      });
   };
 }
 

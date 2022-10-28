@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,10 +8,9 @@
  */
 
 import React, {Component} from 'react';
-import BaseDevice from '../devices/BaseDevice';
+import {BaseDevice, getRenderHostInstance} from 'flipper-frontend-core';
 import {Button, Glyph, colors} from '../ui';
-import path from 'path';
-import os from 'os';
+import {path} from 'flipper-plugin';
 
 type OwnProps = {
   recordingFinished: (path: string | null) => void;
@@ -25,14 +24,12 @@ type DispatchFromProps = {};
 
 type State = {
   recording: boolean;
-  recordingEnabled: boolean;
 };
 type Props = OwnProps & StateFromProps & DispatchFromProps;
 
 export default class VideoRecordingButton extends Component<Props, State> {
   state: State = {
     recording: false,
-    recordingEnabled: true,
   };
 
   startRecording = async () => {
@@ -41,7 +38,10 @@ export default class VideoRecordingButton extends Component<Props, State> {
       return;
     }
 
-    const flipperDirectory = path.join(os.homedir(), '.flipper');
+    const flipperDirectory = path.join(
+      getRenderHostInstance().serverConfig.paths.homePath,
+      '.flipper',
+    );
     const fileName = `screencap-${new Date()
       .toISOString()
       .replace(/:/g, '')}.mp4`;
@@ -77,7 +77,6 @@ export default class VideoRecordingButton extends Component<Props, State> {
     }
   };
   render() {
-    const {recordingEnabled} = this.state;
     const {selectedDevice} = this.props;
     return (
       <Button
@@ -86,7 +85,10 @@ export default class VideoRecordingButton extends Component<Props, State> {
         pulse={this.state.recording}
         selected={this.state.recording}
         title="Make Screen Recording"
-        disabled={!selectedDevice || !recordingEnabled}
+        disabled={
+          !selectedDevice ||
+          !selectedDevice.description.features.screenCaptureAvailable
+        }
         type={this.state.recording ? 'danger' : 'primary'}>
         <Glyph
           name={this.state.recording ? 'stop-playback' : 'camcorder'}

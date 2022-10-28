@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 #pragma once
 
 #include <Flipper/FlipperConnection.h>
+#include <folly/json.h>
 #include <map>
 #include <queue>
 #include <string>
@@ -19,6 +20,11 @@ class FlipperConnectionMock : public FlipperConnection {
  public:
   void send(const std::string& method, const folly::dynamic& params) override {
     sent_[method] = params;
+    sent_message_history[method].push(params);
+  }
+
+  void sendRaw(const std::string& method, const std::string& params) override {
+    sent_[method] = folly::parseJson(params);
     sent_message_history[method].push(params);
   }
 

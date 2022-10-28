@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,7 @@
  * @format
  */
 
-import {FlexColumn, styled, FlexRow, Text, Glyph, colors} from '../../ui';
+import {FlexColumn, styled, FlexRow, Text, Glyph} from '../../ui';
 import React, {useRef, useState, useEffect} from 'react';
 import {theme} from 'flipper-plugin';
 
@@ -141,7 +141,7 @@ const KeyboardShortcutInput = (props: {
   }, [isShortcutValid, pressedKeys, props]);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  let typingTimeout: NodeJS.Timeout;
+  let typingTimeout: any;
 
   const handleFocusInput = () => {
     if (inputRef.current !== null) {

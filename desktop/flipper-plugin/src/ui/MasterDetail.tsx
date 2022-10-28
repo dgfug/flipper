@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,8 +29,9 @@ import {
 } from '@ant-design/icons';
 import {Button} from 'antd';
 import {usePluginInstance} from '../plugin/PluginContext';
-import {Atom, createState, useValue} from '../state/atom';
+import {Atom, createState} from 'flipper-plugin-core';
 import {useAssertStableRef} from '../utils/useAssertStableRef';
+import {useValue} from '../state/atom';
 
 type MasterDetailProps<T> = {
   /**
@@ -104,7 +105,8 @@ export function MasterDetail<T extends object>({
 
   // if a tableManagerRef is provided, we piggy back on that same ref
   // eslint-disable-next-line
-  const tableManagerRef = tableProps.tableManagerRef ?? createRef<undefined | DataTableManager<T>>();
+  const tableManagerRef =
+    tableProps.tableManagerRef ?? createRef<undefined | DataTableManager<T>>();
 
   const pausedState = useValue(isPaused, false);
 

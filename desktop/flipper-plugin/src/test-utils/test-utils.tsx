@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,65 +8,47 @@
  */
 
 import * as React from 'react';
-import {
-  render,
-  RenderResult,
-  act as testingLibAct,
-} from '@testing-library/react';
+import type {RenderResult} from '@testing-library/react';
 import {queries} from '@testing-library/dom';
-import {BundledPluginDetails, InstalledPluginDetails} from 'flipper-plugin-lib';
+import {ServerAddOnControls} from 'flipper-common';
 
 import {
-  RealFlipperClient,
-  SandyPluginInstance,
+  _RealFlipperClient,
+  _SandyPluginInstance,
   PluginClient,
-  PluginFactory,
-} from '../plugin/Plugin';
-import {
-  SandyPluginDefinition,
-  FlipperPluginModule,
-  FlipperDevicePluginModule,
-} from '../plugin/SandyPluginDefinition';
-import {SandyPluginRenderer} from '../plugin/PluginRenderer';
-import {act} from '@testing-library/react';
-import {
-  SandyDevicePluginInstance,
+  _PluginFactory,
+  _SandyPluginDefinition,
+  _FlipperPluginModule,
+  _FlipperDevicePluginModule,
+  _SandyDevicePluginInstance,
   Device,
   DeviceLogListener,
-} from '../plugin/DevicePlugin';
-import {BasePluginInstance} from '../plugin/PluginBase';
-import {FlipperLib} from '../plugin/FlipperLib';
-import {stubLogger} from '../utils/Logger';
-import {Idler} from '../utils/Idler';
-import {createState} from '../state/atom';
-import baseMockConsole from 'jest-mock-console';
+  CrashLogListener,
+  _BasePluginInstance,
+  FlipperLib,
+  _stubLogger,
+  Idler,
+  createState,
+  TestUtils,
+  _StartPluginOptions,
+} from 'flipper-plugin-core';
+import {SandyPluginRenderer} from '../plugin/PluginRenderer';
 import {DeviceLogEntry} from 'flipper-common';
+
+declare const electronRequire: any;
 
 type Renderer = RenderResult<typeof queries>;
 
-interface StartPluginOptions {
-  initialState?: Record<string, any>;
-  isArchived?: boolean;
-  isBackgroundPlugin?: boolean;
-  startUnactivated?: boolean;
-  /** Provide a set of unsupported methods to simulate older clients that don't support certain methods yet */
-  unsupportedMethods?: string[];
-  /**
-   * Provide a set of GKs that are enabled in this test.
-   */
-  GKs?: string[];
-}
-
-type ExtractClientType<Module extends FlipperPluginModule<any>> = Parameters<
+type ExtractClientType<Module extends _FlipperPluginModule<any>> = Parameters<
   Module['plugin']
 >[0];
 
-type ExtractMethodsType<Module extends FlipperPluginModule<any>> =
+type ExtractMethodsType<Module extends _FlipperPluginModule<any>> =
   ExtractClientType<Module> extends PluginClient<any, infer Methods>
     ? Methods
     : never;
 
-type ExtractEventsType<Module extends FlipperPluginModule<any>> =
+type ExtractEventsType<Module extends _FlipperPluginModule<any>> =
   ExtractClientType<Module> extends PluginClient<infer Events, any>
     ? Events
     : never;
@@ -110,9 +92,14 @@ interface BasePluginResult {
    * Trigger menu entry by label
    */
   triggerMenuEntry(label: string): void;
+  // TODO: Refine server add-on test methods
+  /**
+   * Communication with a server add-on
+   */
+  serverAddOnControls: ServerAddOnControls;
 }
 
-interface StartPluginResult<Module extends FlipperPluginModule<any>>
+interface StartPluginResult<Module extends _FlipperPluginModule<any>>
   extends BasePluginResult {
   /**
    * the instantiated plugin for this test
@@ -160,7 +147,7 @@ interface StartPluginResult<Module extends FlipperPluginModule<any>>
   ): void;
 }
 
-interface StartDevicePluginResult<Module extends FlipperDevicePluginModule>
+interface StartDevicePluginResult<Module extends _FlipperDevicePluginModule>
   extends BasePluginResult {
   /**
    * the instantiated plugin for this test
@@ -176,12 +163,14 @@ interface StartDevicePluginResult<Module extends FlipperDevicePluginModule>
   sendLogEntry(logEntry: DeviceLogEntry): void;
 }
 
-export function startPlugin<Module extends FlipperPluginModule<any>>(
+export function startPlugin<Module extends _FlipperPluginModule<any>>(
   module: Module,
-  options?: StartPluginOptions,
+  options?: _StartPluginOptions,
 ): StartPluginResult<Module> {
-  const definition = new SandyPluginDefinition(
-    createMockPluginDetails(),
+  const {act} = electronRequire('@testing-library/react');
+
+  const definition = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails(),
     module,
   );
   if (definition.isDevicePlugin) {
@@ -190,12 +179,12 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
     );
   }
 
-  const sendStub = jest.fn();
-  const flipperUtils = createMockFlipperLib(options);
+  const sendStub = TestUtils.createStubFunction();
+  const flipperUtils = TestUtils.createMockFlipperLib(options);
   const testDevice = createMockDevice(options);
   const appName = 'TestApplication';
   const deviceName = 'TestDevice';
-  const fakeFlipperClient: RealFlipperClient = {
+  const fakeFlipperClient: _RealFlipperClient = {
     id: `${appName}#${testDevice.os}#${deviceName}#${testDevice.serial}`,
     plugins: new Set([definition.id]),
     query: {
@@ -236,7 +225,10 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
     },
   };
 
-  const pluginInstance = new SandyPluginInstance(
+  const serverAddOnControls = createServerAddOnControlsMock();
+
+  const pluginInstance = new _SandyPluginInstance(
+    serverAddOnControls,
     flipperUtils,
     definition,
     fakeFlipperClient,
@@ -245,7 +237,7 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
   );
 
   const res: StartPluginResult<Module> = {
-    ...createBasePluginResult(pluginInstance),
+    ...createBasePluginResult(pluginInstance, serverAddOnControls),
     instance: pluginInstance.instanceApi,
     module,
     connect: () => pluginInstance.connect(),
@@ -264,6 +256,7 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
         pluginInstance.receiveMessages(messages as any);
       });
     },
+    serverAddOnControls,
   };
   (res as any)._backingInstance = pluginInstance;
   // we start activated
@@ -276,22 +269,24 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
   return res;
 }
 
-export function renderPlugin<Module extends FlipperPluginModule<any>>(
+export function renderPlugin<Module extends _FlipperPluginModule<any>>(
   module: Module,
-  options?: StartPluginOptions,
+  options?: _StartPluginOptions,
 ): StartPluginResult<Module> & {
   renderer: Renderer;
   act: (cb: () => void) => void;
 } {
+  // prevent bundling in UI bundle
+  const {render, act} = electronRequire('@testing-library/react');
   const res = startPlugin(module, options);
-  const pluginInstance: SandyPluginInstance = (res as any)._backingInstance;
+  const pluginInstance: _SandyPluginInstance = (res as any)._backingInstance;
 
   const renderer = render(<SandyPluginRenderer plugin={pluginInstance} />);
 
   return {
     ...res,
     renderer,
-    act: testingLibAct,
+    act,
     destroy: () => {
       renderer.unmount();
       pluginInstance.destroy();
@@ -299,12 +294,14 @@ export function renderPlugin<Module extends FlipperPluginModule<any>>(
   };
 }
 
-export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
+export function startDevicePlugin<Module extends _FlipperDevicePluginModule>(
   module: Module,
-  options?: StartPluginOptions,
+  options?: _StartPluginOptions,
 ): StartDevicePluginResult<Module> {
-  const definition = new SandyPluginDefinition(
-    createMockPluginDetails({pluginType: 'device'}),
+  const {act} = electronRequire('@testing-library/react');
+
+  const definition = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails({pluginType: 'device'}),
     module,
   );
   if (!definition.isDevicePlugin) {
@@ -313,9 +310,11 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
     );
   }
 
-  const flipperLib = createMockFlipperLib(options);
+  const flipperLib = TestUtils.createMockFlipperLib(options);
   const testDevice = createMockDevice(options);
-  const pluginInstance = new SandyDevicePluginInstance(
+  const serverAddOnControls = createServerAddOnControlsMock();
+  const pluginInstance = new _SandyDevicePluginInstance(
+    serverAddOnControls,
     flipperLib,
     definition,
     testDevice,
@@ -324,7 +323,7 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
   );
 
   const res: StartDevicePluginResult<Module> = {
-    ...createBasePluginResult(pluginInstance),
+    ...createBasePluginResult(pluginInstance, serverAddOnControls),
     module,
     instance: pluginInstance.instanceApi,
     sendLogEntry: (entry) => {
@@ -341,16 +340,18 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
   return res;
 }
 
-export function renderDevicePlugin<Module extends FlipperDevicePluginModule>(
+export function renderDevicePlugin<Module extends _FlipperDevicePluginModule>(
   module: Module,
-  options?: StartPluginOptions,
+  options?: _StartPluginOptions,
 ): StartDevicePluginResult<Module> & {
   renderer: Renderer;
   act: (cb: () => void) => void;
 } {
+  const {render, act} = electronRequire('@testing-library/react');
+
   const res = startDevicePlugin(module, options);
   // @ts-ignore hidden api
-  const pluginInstance: SandyDevicePluginInstance = (res as any)
+  const pluginInstance: _SandyDevicePluginInstance = (res as any)
     ._backingInstance;
 
   const renderer = render(<SandyPluginRenderer plugin={pluginInstance} />);
@@ -358,7 +359,7 @@ export function renderDevicePlugin<Module extends FlipperDevicePluginModule>(
   return {
     ...res,
     renderer,
-    act: testingLibAct,
+    act,
     destroy: () => {
       renderer.unmount();
       pluginInstance.destroy();
@@ -366,30 +367,9 @@ export function renderDevicePlugin<Module extends FlipperDevicePluginModule>(
   };
 }
 
-export function createMockFlipperLib(options?: StartPluginOptions): FlipperLib {
-  return {
-    isFB: false,
-    logger: stubLogger,
-    enableMenuEntries: jest.fn(),
-    createPaste: jest.fn(),
-    GK(gk: string) {
-      return options?.GKs?.includes(gk) || false;
-    },
-    selectPlugin: jest.fn(),
-    writeTextToClipboard: jest.fn(),
-    openLink: jest.fn(),
-    showNotification: jest.fn(),
-    exportFile: jest.fn(),
-    importFile: jest.fn(),
-    paths: {
-      appPath: process.cwd(),
-      homePath: `/dev/null`,
-    },
-  };
-}
-
 function createBasePluginResult(
-  pluginInstance: BasePluginInstance,
+  pluginInstance: _BasePluginInstance,
+  serverAddOnControls: ServerAddOnControls,
 ): BasePluginResult {
   return {
     flipperLib: pluginInstance.flipperLib,
@@ -404,7 +384,7 @@ function createBasePluginResult(
       return new Promise((resolve) => {
         // this ensures the test won't continue until the setImmediate used by
         // the deeplink handling event is handled
-        setImmediate(resolve);
+        setTimeout(resolve, 0);
       });
     },
     destroy: () => pluginInstance.destroy(),
@@ -415,95 +395,30 @@ function createBasePluginResult(
       }
       entry.handler();
     },
+    serverAddOnControls,
   };
 }
 
-export function createMockPluginDetails(
-  details?: Partial<InstalledPluginDetails>,
-): InstalledPluginDetails {
-  return {
-    id: 'TestPlugin',
-    dir: '',
-    name: 'TestPlugin',
-    specVersion: 0,
-    entry: '',
-    isBundled: false,
-    isActivatable: true,
-    main: '',
-    source: '',
-    title: 'Testing Plugin',
-    version: '',
-    ...details,
-  };
-}
-
-export function createTestPlugin<T extends PluginFactory<any, any>>(
-  implementation: Pick<FlipperPluginModule<T>, 'plugin'> &
-    Partial<FlipperPluginModule<T>>,
-  details?: Partial<InstalledPluginDetails>,
-) {
-  return new SandyPluginDefinition(
-    createMockPluginDetails({
-      pluginType: 'client',
-      ...details,
-    }),
-    {
-      Component() {
-        return null;
-      },
-      ...implementation,
-    },
-  );
-}
-
-export function createTestDevicePlugin(
-  implementation: Pick<FlipperDevicePluginModule, 'devicePlugin'> &
-    Partial<FlipperDevicePluginModule>,
-  details?: Partial<InstalledPluginDetails>,
-) {
-  return new SandyPluginDefinition(
-    createMockPluginDetails({
-      pluginType: 'device',
-      ...details,
-    }),
-    {
-      supportsDevice() {
-        return true;
-      },
-      Component() {
-        return null;
-      },
-      ...implementation,
-    },
-  );
-}
-
-export function createMockBundledPluginDetails(
-  details?: Partial<BundledPluginDetails>,
-): BundledPluginDetails {
-  return {
-    id: 'TestBundledPlugin',
-    name: 'TestBundledPlugin',
-    specVersion: 0,
-    pluginType: 'client',
-    isBundled: true,
-    isActivatable: true,
-    main: '',
-    source: '',
-    title: 'Testing Bundled Plugin',
-    version: '',
-    ...details,
-  };
-}
-
-function createMockDevice(options?: StartPluginOptions): Device & {
+function createMockDevice(options?: _StartPluginOptions): Device & {
   addLogEntry(entry: DeviceLogEntry): void;
 } {
   const logListeners: (undefined | DeviceLogListener)[] = [];
+  const crashListeners: (undefined | CrashLogListener)[] = [];
   return {
     os: 'Android',
+    description: {
+      os: 'Android',
+      deviceType: 'emulator',
+      features: {
+        screenCaptureAvailable: false,
+        screenshotAvailable: false,
+      },
+      serial: '123',
+      title: 'Test device',
+    },
     deviceType: 'emulator',
     serial: 'serial-000',
+    ...options?.testDevice,
     isArchived: !!options?.isArchived,
     connected: createState(true),
     addLogListener(cb) {
@@ -513,18 +428,28 @@ function createMockDevice(options?: StartPluginOptions): Device & {
     removeLogListener(idx) {
       logListeners[idx as any] = undefined;
     },
+    addCrashListener(cb) {
+      crashListeners.push(cb);
+      return (crashListeners.length - 1) as any;
+    },
+    removeCrashListener(idx) {
+      crashListeners[idx as any] = undefined;
+    },
     addLogEntry(entry: DeviceLogEntry) {
       logListeners.forEach((f) => f?.(entry));
     },
-    executeShell: jest.fn(),
-    clearLogs: jest.fn(),
-    forwardPort: jest.fn(),
+    executeShell: TestUtils.createStubFunction(),
+    clearLogs: TestUtils.createStubFunction(),
+    forwardPort: TestUtils.createStubFunction(),
     get isConnected() {
       return this.connected.get();
     },
-    navigateToLocation: jest.fn(),
-    screenshot: jest.fn(),
-    sendMetroCommand: jest.fn(),
+    installApp(_: string) {
+      return Promise.resolve();
+    },
+    navigateToLocation: TestUtils.createStubFunction(),
+    screenshot: TestUtils.createStubFunction(),
+    sendMetroCommand: TestUtils.createStubFunction(),
   };
 }
 
@@ -543,41 +468,20 @@ function createStubIdler(): Idler {
   };
 }
 
-/**
- * Mockes the current console. Inspect results through e.g.
- * console.errorCalls etc.
- *
- * Or, alternatively, expect(mockedConsole.error).toBeCalledWith...
- *
- * Don't forgot to call .unmock when done!
- */
-export function mockConsole() {
-  const restoreConsole = baseMockConsole();
-  // The mocked console methods, make sure they remain available after unmocking
-  const {log, error, warn} = console as any;
+function createServerAddOnControlsMock(): ServerAddOnControls {
   return {
-    get logCalls(): any[][] {
-      return log.mock.calls;
-    },
-    get errorCalls(): any[][] {
-      return error.mock.calls;
-    },
-    get warnCalls(): any[][] {
-      return warn.mock.calls;
-    },
-    get log(): jest.Mock<any, any> {
-      return log as any;
-    },
-    get warn(): jest.Mock<any, any> {
-      return warn as any;
-    },
-    get error(): jest.Mock<any, any> {
-      return error as any;
-    },
-    unmock() {
-      restoreConsole();
-    },
+    start: TestUtils.createStubFunction(),
+    stop: TestUtils.createStubFunction(),
+    sendMessage: TestUtils.createStubFunction(),
+    receiveMessage: TestUtils.createStubFunction(),
+    receiveAnyMessage: TestUtils.createStubFunction(),
+    unsubscribePlugin: TestUtils.createStubFunction(),
+    unsubscribe: TestUtils.createStubFunction(),
   };
 }
 
-export type MockedConsole = ReturnType<typeof mockConsole>;
+export const createMockFlipperLib = TestUtils.createMockFlipperLib;
+export const createMockPluginDetails = TestUtils.createMockPluginDetails;
+export const createTestPlugin = TestUtils.createTestPlugin;
+export const createTestDevicePlugin = TestUtils.createTestDevicePlugin;
+export const createFlipperServerMock = TestUtils.createFlipperServerMock;

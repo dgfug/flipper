@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -216,7 +216,7 @@ const DataTable = React.memo(
     currentStructure: Structure | null;
     onRowEdited: (changes: {[key: string]: string | null}) => void;
   }) =>
-    page ? (
+    page && page.columns ? (
       <Layout.Horizontal grow>
         <ManagedTable
           tableKey={`databases-${page.databaseId}-${page.table}`}
@@ -278,7 +278,7 @@ const QueryTable = React.memo(
       const columns = table.columns;
       const rows = table.rows;
       return (
-        <Layout.Horizontal grow>
+        <Layout.Container grow>
           <ManagedTable
             floating={false}
             multiline
@@ -304,7 +304,7 @@ const QueryTable = React.memo(
               columnValues={table.rows[table.highlightedRows[0]]}
             />
           )}
-        </Layout.Horizontal>
+        </Layout.Container>
       );
     } else if (query.id && query.id !== null) {
       return (
@@ -744,40 +744,38 @@ export function Component() {
           </Toolbar>
         </Layout.Container>
       ) : null}
-      <Layout.Horizontal grow>
-        <Layout.Container grow>
-          {state.viewMode === 'data' ? (
-            <DataTable
-              page={state.currentPage}
-              highlightedRowsChanged={pageHighlightedRowsChanged}
-              onRowEdited={onRowEdited}
-              sortOrderChanged={sortOrderChanged}
-              currentSort={state.currentSort}
-              currentStructure={state.currentStructure}
-            />
-          ) : null}
-          {state.viewMode === 'structure' && state.currentStructure ? (
-            <DatabaseStructure structure={state.currentStructure} />
-          ) : null}
-          {state.viewMode === 'SQL' ? (
-            <QueryTable
-              query={state.queryResult}
-              highlightedRowsChanged={queryHighlightedRowsChanged}
-            />
-          ) : null}
-          {state.viewMode === 'tableInfo' ? (
-            <Layout.Horizontal
-              grow
-              pad={theme.space.small}
-              style={{paddingBottom: 0}}>
-              <TextArea value={sqlFormatter.format(state.tableInfo)} readOnly />
-            </Layout.Horizontal>
-          ) : null}
-          {state.viewMode === 'queryHistory' ? (
-            <QueryHistory history={state.queryHistory} />
-          ) : null}
-        </Layout.Container>
-      </Layout.Horizontal>
+      <Layout.Container grow>
+        {state.viewMode === 'data' ? (
+          <DataTable
+            page={state.currentPage}
+            highlightedRowsChanged={pageHighlightedRowsChanged}
+            onRowEdited={onRowEdited}
+            sortOrderChanged={sortOrderChanged}
+            currentSort={state.currentSort}
+            currentStructure={state.currentStructure}
+          />
+        ) : null}
+        {state.viewMode === 'structure' && state.currentStructure ? (
+          <DatabaseStructure structure={state.currentStructure} />
+        ) : null}
+        {state.viewMode === 'SQL' ? (
+          <QueryTable
+            query={state.queryResult}
+            highlightedRowsChanged={queryHighlightedRowsChanged}
+          />
+        ) : null}
+        {state.viewMode === 'tableInfo' ? (
+          <Layout.Horizontal
+            grow
+            pad={theme.space.small}
+            style={{paddingBottom: 0}}>
+            <TextArea value={sqlFormatter.format(state.tableInfo)} readOnly />
+          </Layout.Horizontal>
+        ) : null}
+        {state.viewMode === 'queryHistory' ? (
+          <QueryHistory history={state.queryHistory} />
+        ) : null}
+      </Layout.Container>
       <Toolbar position="bottom" style={{paddingLeft: 8}}>
         <Layout.Horizontal grow>
           {state.viewMode === 'SQL' && state.executionTime !== 0 ? (

@@ -70,7 +70,8 @@
     24
   ],
   "caution": [
-    16
+    16,
+    24
   ],
   "checkmark": [
     16
@@ -111,6 +112,7 @@
     24
   ],
   "cross": [
+    12,
     16
   ],
   "dashboard-outline": [
@@ -478,7 +480,8 @@
     16
   ],
   "caution-circle": [
-    12
+    12,
+    24
   ],
   "megaphone": [
     12,
@@ -601,10 +604,58 @@
   "camcorder-live": [
     16
   ],
+  "plumbing": [
+    16
+  ],
   "app-facebook-circle": [
     16
   ],
   "link": [
+    16
+  ],
+  "commercial-break-usd": [
+    16
+  ],
+  "friends-engagement": [
+    16
+  ],
+  "app-cms": [
+    16
+  ],
+  "caution-triangle-outline": [
+    24
+  ],
+  "bird-flying": [
+    16
+  ],
+  "arrows-left-right": [
+    16
+  ],
+  "grid-9": [
+    16
+  ],
+  "stethoscope": [
+    16
+  ],
+  "friend-except": [
+    16
+  ],
+  "app-instagram": [
+    16
+  ],
+  "nav-magnifying-glass": [
+    16
+  ],
+  "list-arrow-down": [
+    16
+  ],
+  "photo-arrows-left-right": [
+    16
+  ],
+  "badge": [
+    16
+  ],
+  "square-ruler": [
     16
   ]
 }

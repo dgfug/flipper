@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -170,6 +170,15 @@ export function bodyAsBinary(
   return undefined;
 }
 
+export const queryToObj = (query: string) => {
+  const params = new URLSearchParams(query);
+  const obj: Record<string, any> = {};
+  params.forEach((value, key) => {
+    obj[key] = value;
+  });
+  return obj;
+};
+
 function escapeCharacter(x: string) {
   const code = x.charCodeAt(0);
   return code < 16 ? '\\u0' + code.toString(16) : '\\u' + code.toString(16);
@@ -197,14 +206,26 @@ function escapedString(str: string) {
   return "'" + str + "'";
 }
 
-export function getResponseLength(request: ResponseInfo): number {
-  const lengthString = request.headers
-    ? getHeaderValue(request.headers, 'content-length')
+export function getResponseLength(response: ResponseInfo): number {
+  const lengthString = response.headers
+    ? getHeaderValue(response.headers, 'content-length')
     : undefined;
   if (lengthString) {
     return parseInt(lengthString, 10);
-  } else if (request.data) {
-    return Buffer.byteLength(request.data, 'base64');
+  } else if (response.data) {
+    return Buffer.byteLength(response.data, 'base64');
+  }
+  return 0;
+}
+
+export function getRequestLength(request: Request): number {
+  const lengthString = request.requestHeaders
+    ? getHeaderValue(request.requestHeaders, 'content-length')
+    : undefined;
+  if (lengthString) {
+    return parseInt(lengthString, 10);
+  } else if (request.requestData) {
+    return Buffer.byteLength(request.requestData, 'base64');
   }
   return 0;
 }

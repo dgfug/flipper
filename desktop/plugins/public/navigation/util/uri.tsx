@@ -1,13 +1,11 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
  * @format
  */
-
-import querystring from 'querystring';
 
 export const validateParameter = (value: string, parameter: string) => {
   return (
@@ -26,10 +24,10 @@ export const filterOptionalParameters = (uri: string) => {
 export const parseURIParameters = (query: string) => {
   // get parameters from query string and store in Map
   const parameters = query.split('?').splice(1).join('');
-  const parametersObj = querystring.parse(parameters);
+  const parametersObj = new URLSearchParams(parameters);
   const parametersMap = new Map<string, string>();
   for (const key in parametersObj) {
-    parametersMap.set(key, parametersObj[key] as string);
+    parametersMap.set(key, parametersObj.get(key) as string);
   }
   return parametersMap;
 };

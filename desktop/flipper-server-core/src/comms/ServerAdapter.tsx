@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,10 +7,7 @@
  * @format
  */
 
-import {
-  CertificateExchangeMedium,
-  SecureServerConfig,
-} from '../utils/CertificateProvider';
+import {CertificateExchangeMedium} from '../utils/CertificateProvider';
 import {ClientConnection} from './ClientConnection';
 import {transformCertificateExchangeMediumToType} from './Utilities';
 import {
@@ -18,6 +15,7 @@ import {
   ClientQuery,
   SignCertificateMessage,
 } from 'flipper-common';
+import {SecureServerConfig} from '../utils/certificateUtils';
 
 /**
  * ClientCsrQuery defines a client query with CSR
@@ -107,6 +105,10 @@ export interface ServerEventsListener {
    * // TODO: payload should become JSON
    */
   onClientMessage(clientId: string, payload: string): void;
+
+  onClientSetupError(clientQuery: ClientQuery, error: any): void;
+
+  onDeprecationNotice: (message: string) => void;
 }
 
 /**
@@ -180,12 +182,7 @@ abstract class ServerAdapter {
         });
         return response;
       } catch (e) {
-        console.error(
-          `[conn] Failed to exchange certificate with ${clientQuery.app} on ${
-            clientQuery.device || clientQuery.device_id
-          }`,
-          e,
-        );
+        this.listener.onClientSetupError(clientQuery, e);
       }
     }
 

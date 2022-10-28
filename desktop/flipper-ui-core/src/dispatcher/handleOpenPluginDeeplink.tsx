@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,36 +9,35 @@
 
 import React from 'react';
 import {Dialog, getFlipperLib} from 'flipper-plugin';
-import {isTest} from 'flipper-common';
+import {isTest, UserNotSignedInError} from 'flipper-common';
 import {getUser} from '../fb-stubs/user';
 import {State, Store} from '../reducers/index';
 import {checkForUpdate} from '../fb-stubs/checkForUpdate';
 import {getAppVersion} from '../utils/info';
-import {UserNotSignedInError} from 'flipper-common';
 import {
   canBeDefaultDevice,
+  getAllClients,
   selectPlugin,
   setPluginEnabled,
 } from '../reducers/connections';
 import {getUpdateAvailableMessage} from '../chrome/UpdateIndicator';
 import {Typography} from 'antd';
 import {getPluginStatus, PluginStatus} from '../utils/pluginUtils';
-import {loadPluginsFromMarketplace} from './fb-stubs/pluginMarketplace';
-import {loadPlugin, switchPlugin} from '../reducers/pluginManager';
+import {loadPluginsFromMarketplace} from './pluginMarketplace';
+import {switchPlugin} from '../reducers/pluginManager';
 import {startPluginDownload} from '../reducers/pluginDownloads';
 import isProduction from '../utils/isProduction';
-import BaseDevice from '../devices/BaseDevice';
+import {BaseDevice, getRenderHostInstance} from 'flipper-frontend-core';
 import Client from '../Client';
 import {RocketOutlined} from '@ant-design/icons';
 import {showEmulatorLauncher} from '../sandy-chrome/appinspect/LaunchEmulator';
-import {getAllClients} from '../reducers/connections';
 import {showLoginDialog} from '../chrome/fb-stubs/SignInSheet';
 import {
   DeeplinkInteraction,
   DeeplinkInteractionState,
   OpenPluginParams,
 } from '../deeplinkTracking';
-import {getRenderHostInstance} from '../RenderHost';
+import {waitFor} from '../utils/waitFor';
 
 export function parseOpenPluginParams(query: string): OpenPluginParams {
   // 'flipper://open-plugin?plugin-id=graphql&client=facebook&devices=android,ios&chrome=1&payload='
@@ -103,7 +102,14 @@ export async function handleOpenPluginDeeplink(
     title,
     isDevicePlugin,
   );
-  console.debug('[deeplink] Selected device and client:', deviceOrClient);
+  console.debug(
+    '[deeplink] Selected device and client:',
+    deviceOrClient instanceof BaseDevice
+      ? deviceOrClient.description
+      : deviceOrClient instanceof Client
+      ? deviceOrClient.query
+      : deviceOrClient,
+  );
   if ('errorState' in deviceOrClient) {
     trackInteraction({
       state: deviceOrClient.errorState,
@@ -117,8 +123,8 @@ export async function handleOpenPluginDeeplink(
   const device: BaseDevice = isDevicePlugin
     ? (deviceOrClient as BaseDevice)
     : (deviceOrClient as Client).device;
-  console.debug('[deeplink] Client: ', client);
-  console.debug('[deeplink] Device: ', device);
+  console.debug('[deeplink] Client: ', client?.query);
+  console.debug('[deeplink] Device: ', device?.description);
 
   // verify plugin supported by selected device / client
   if (isDevicePlugin && !device.supportsPlugin(pluginDefinition)) {
@@ -135,6 +141,17 @@ export async function handleOpenPluginDeeplink(
     return;
   }
   console.debug('[deeplink] Cleared device plugin support check.');
+
+  console.debug(
+    '[deeplink] Waiting for client initialization',
+    client?.id,
+    client?.initializationPromise,
+  );
+
+  await client?.initializationPromise;
+
+  console.debug('[deeplink] Client initialized ', client?.id);
+
   if (!isDevicePlugin && !client!.plugins.has(params.pluginId)) {
     await Dialog.alert({
       title,
@@ -194,7 +211,10 @@ async function verifyLighthouseAndUserLoggedIn(
   store: Store,
   title: string,
 ): Promise<boolean> {
-  if (!getFlipperLib().isFB || process.env.NODE_ENV === 'test') {
+  if (
+    !getFlipperLib().isFB ||
+    getRenderHostInstance().serverConfig.env.NODE_ENV === 'test'
+  ) {
     return true; // ok, continue
   }
 
@@ -262,23 +282,9 @@ async function waitForLogin(store: Store) {
   return waitFor(store, (state) => !!state.user?.id);
 }
 
-// make this more reusable?
-function waitFor(
-  store: Store,
-  predicate: (state: State) => boolean,
-): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const unsub = store.subscribe(() => {
-      if (predicate(store.getState())) {
-        unsub();
-        resolve();
-      }
-    });
-  });
-}
-
 async function verifyFlipperIsUpToDate(title: string) {
-  if (!isProduction() || isTest()) {
+  const config = getRenderHostInstance().serverConfig.processConfig;
+  if (!isProduction() || isTest() || config.suppressPluginUpdateNotifications) {
     return;
   }
   const currentVersion = getAppVersion();
@@ -320,11 +326,12 @@ async function verifyPluginStatus(
   pluginId: string,
   title: string,
 ): Promise<[boolean, PluginStatus]> {
+  await waitFor(store, (state) => state.plugins.initialized);
   // make sure we have marketplace plugin data present
   if (!isTest() && !store.getState().plugins.marketplacePlugins.length) {
     // plugins not yet fetched
     // updates plugins from marketplace (if logged in), and stores them
-    await loadPluginsFromMarketplace();
+    await loadPluginsFromMarketplace(store);
   }
   // while true loop; after pressing install or add GK, we want to check again if plugin is available
   while (true) {
@@ -371,11 +378,6 @@ async function verifyPluginStatus(
           return [false, status];
         }
         break;
-      case 'bundle_installable': {
-        // For convenience, don't ask user to install bundled plugins, handle it directly
-        await installBundledPlugin(store, pluginId, title);
-        break;
-      }
       case 'marketplace_installable': {
         if (!(await installMarketPlacePlugin(store, pluginId, title))) {
           return [false, status];
@@ -385,30 +387,6 @@ async function verifyPluginStatus(
       default:
         throw new Error('Unhandled state: ' + status);
     }
-  }
-}
-
-async function installBundledPlugin(
-  store: Store,
-  pluginId: string,
-  title: string,
-) {
-  const plugin = store.getState().plugins.bundledPlugins.get(pluginId);
-  if (!plugin || !plugin.isBundled) {
-    throw new Error(`Failed to find bundled plugin '${pluginId}'`);
-  }
-  const loadingDialog = Dialog.loading({
-    title,
-    message: `Loading plugin '${pluginId}'...`,
-  });
-  store.dispatch(loadPlugin({plugin, enable: true, notifyIfFailed: true}));
-  try {
-    await waitFor(
-      store,
-      () => getPluginStatus(store, pluginId)[0] !== 'bundle_installable',
-    );
-  } finally {
-    loadingDialog.close();
   }
 }
 
@@ -484,7 +462,7 @@ async function selectDevicesAndClient(
   const availableDevices = findValidDevices();
   console.debug(
     '[deeplink] selectDevicesAndClient found at least one more valid device:',
-    availableDevices,
+    availableDevices.map((d) => d.description),
   );
   // device plugin
   if (isDevicePlugin) {
@@ -498,66 +476,97 @@ async function selectDevicesAndClient(
     return selectedDevice;
   }
 
-  console.debug('[deeplink] Not a device plugin. Waiting for valid client.');
-  // wait for valid client
-  while (true) {
-    const origClients = store.getState().connections.clients;
-    const validClients = getAllClients(store.getState().connections)
-      .filter(
-        // correct app name, or, if not set, an app that at least supports this plugin
-        (c) =>
-          params.client
-            ? c.query.app === params.client
-            : c.plugins.has(params.pluginId),
-      )
-      .filter((c) => c.connected.get())
-      .filter((c) => availableDevices.includes(c.device));
+  console.debug(
+    '[deeplink] Not a device plugin. Waiting for valid client. current clients',
+    store.getState().connections.clients,
+  );
+  return await waitForClient(store, availableDevices, params, title);
+}
 
-    if (validClients.length === 1) {
-      return validClients[0];
-    }
-    if (validClients.length > 1) {
-      const selectedClient = await selectClientDialog(validClients, title);
-      if (!selectedClient) {
-        return {errorState: 'PLUGIN_CLIENT_SELECTION_BAIL'};
-      }
-      return selectedClient;
-    }
+async function waitForClient(
+  store: Store,
+  availableDevices: BaseDevice[],
+  params: OpenPluginParams,
+  title: string,
+): Promise<Client | DeeplinkError> {
+  const response = await tryGetClient(
+    store.getState(),
+    availableDevices,
+    params,
+    title,
+  );
 
-    // no valid client yet
-    const result = await new Promise<boolean>((resolve) => {
-      const dialog = Dialog.alert({
-        title,
-        type: 'warning',
-        message: params.client
-          ? `Application '${params.client}' doesn't seem to be connected yet. Please start a debug version of the app to continue.`
-          : `No application that supports plugin '${params.pluginId}' seems to be running. Please start a debug application that supports the plugin to continue.`,
-        okText: 'Cancel',
-      });
-      // eslint-disable-next-line promise/catch-or-return
-      dialog.then(() => resolve(false));
-
-      // eslint-disable-next-line promise/catch-or-return
-      waitFor(store, (state) => state.connections.clients !== origClients).then(
-        () => {
-          dialog.close();
-          resolve(true);
-        },
-      );
-
-      // We also want to react to changes in the available plugins and refresh.
-      origClients.forEach((c) =>
-        c.on('plugins-change', () => {
-          dialog.close();
-          resolve(true);
-        }),
-      );
-    });
-
-    if (!result) {
-      return {errorState: 'PLUGIN_CLIENT_BAIL'}; // User cancelled
-    }
+  if (response != null) {
+    return response;
   }
+
+  const dialog = Dialog.alert({
+    title,
+    type: 'warning',
+    message: params.client
+      ? `Application '${params.client}' doesn't seem to be connected yet. Please start a debug version of the app to continue.`
+      : `No application that supports plugin '${params.pluginId}' seems to be running. Please start a debug application that supports the plugin to continue.`,
+    okText: 'Cancel',
+  });
+
+  const userCancelled: Promise<DeeplinkError> = dialog.then(() => ({
+    errorState: 'PLUGIN_CLIENT_BAIL',
+  }));
+
+  let unsubStore: () => void;
+  const clientFound = new Promise<Client | DeeplinkError>(async (resolve) => {
+    unsubStore = store.subscribe(async () => {
+      const state = store.getState();
+      const client = await tryGetClient(state, availableDevices, params, title);
+      if (client != null) {
+        resolve(client);
+      }
+    });
+  });
+
+  return await Promise.race([userCancelled, clientFound]).finally(() => {
+    console.log('[deeplink] finally cleanup', {clientFound, dialog});
+    dialog.close();
+    unsubStore();
+  });
+}
+
+async function tryGetClient(
+  state: State,
+  availableDevices: BaseDevice[],
+  params: OpenPluginParams,
+  title: string,
+): Promise<null | DeeplinkError | Client> {
+  const validClients = getAllClients(state.connections)
+    .filter(
+      // correct app name, or, if not set, an app that at least supports this plugin
+      (c) =>
+        params.client
+          ? c.query.app === params.client
+          : c.plugins.has(params.pluginId),
+    )
+    .filter((c) => c.connected.get())
+    .filter((c) =>
+      availableDevices.map((d) => d.serial).includes(c.device.serial),
+    );
+
+  if (validClients.length === 1) {
+    return validClients[0];
+  }
+  if (validClients.length > 1) {
+    const selectedClient = await selectClientDialog(validClients, title);
+    if (!selectedClient) {
+      return {errorState: 'PLUGIN_CLIENT_SELECTION_BAIL'};
+    }
+    return selectedClient;
+  }
+
+  console.debug(`[deeplink] Did not find client`, {
+    clients: getAllClients(state.connections),
+    params,
+    availableDevices,
+  });
+  return null;
 }
 
 /**

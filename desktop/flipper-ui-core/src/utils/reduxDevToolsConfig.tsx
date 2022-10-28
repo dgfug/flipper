@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,7 @@
  */
 
 import {State} from '../reducers/index';
-import {DeviceExport} from '../devices/BaseDevice';
+import {DeviceExport} from 'flipper-frontend-core';
 
 export const stateSanitizer = (state: State) => {
   if (state.connections && state.connections.devices) {

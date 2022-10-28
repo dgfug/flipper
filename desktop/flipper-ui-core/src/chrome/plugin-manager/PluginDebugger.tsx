@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,7 @@
  * @format
  */
 
-import {PluginDetails} from 'flipper-plugin-lib';
+import {PluginDetails} from 'flipper-common';
 import {Layout} from 'flipper-plugin';
 import Client from '../../Client';
 import {TableBodyRow} from '../../ui/components/table/types';
@@ -140,7 +140,7 @@ class PluginDebugger extends Component<Props> {
   getRows(): Array<TableBodyRow> {
     const rows: Array<TableBodyRow> = [];
 
-    const externalPluginPath = (p: any) => (p.isBundled ? 'bundled' : p.entry);
+    const externalPluginPath = (p: any) => p.entry;
 
     this.props.gatekeepedPlugins.forEach((plugin) =>
       rows.push(

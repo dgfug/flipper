@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -26,13 +26,13 @@ import {Percentage} from '../../utils/widthUtils';
 import {
   DataSourceRendererVirtual,
   DataSourceRendererStatic,
-  DataSource,
   DataSourceVirtualizer,
 } from '../../data-source/index';
 import {
   computeDataTableFilter,
   createDataTableManager,
   createInitialState,
+  DataManagerState,
   DataTableManager,
   dataTableManagerReducer,
   DataTableReducer,
@@ -44,23 +44,31 @@ import {TableSearch} from './TableSearch';
 import styled from '@emotion/styled';
 import {theme} from '../theme';
 import {tableContextMenuFactory} from './TableContextMenu';
-import {Typography} from 'antd';
+import {Menu, Switch, InputRef, Typography} from 'antd';
 import {CoffeeOutlined, SearchOutlined, PushpinFilled} from '@ant-design/icons';
 import {useAssertStableRef} from '../../utils/useAssertStableRef';
 import {Formatter} from '../DataFormatter';
 import {usePluginInstanceMaybe} from '../../plugin/PluginContext';
 import {debounce} from 'lodash';
 import {useInUnitTest} from '../../utils/useInUnitTest';
-import {createDataSource} from '../../state/createDataSource';
+import {
+  createDataSource,
+  DataSource,
+  _DataSourceView,
+} from 'flipper-plugin-core';
+import {HighlightProvider} from '../Highlight';
+import {useLatestRef} from '../../utils/useLatestRef';
 
-interface DataTableBaseProps<T = any> {
+type DataTableBaseProps<T = any> = {
   columns: DataTableColumn<T>[];
   enableSearchbar?: boolean;
   enableAutoScroll?: boolean;
+  enableHorizontalScroll?: boolean;
   enableColumnHeaders?: boolean;
   enableMultiSelect?: boolean;
   enableContextMenu?: boolean;
   enablePersistSettings?: boolean;
+  enableMultiPanels?: boolean;
   // if set (the default) will grow and become scrollable. Otherwise will use natural size
   scrollable?: boolean;
   extraActions?: React.ReactElement;
@@ -71,8 +79,8 @@ interface DataTableBaseProps<T = any> {
   onContextMenu?: (selection: undefined | T) => React.ReactElement;
   onRenderEmpty?:
     | null
-    | ((dataSource?: DataSource<T, T[keyof T]>) => React.ReactElement);
-}
+    | ((dataView?: _DataSourceView<T, T[keyof T]>) => React.ReactElement);
+};
 
 export type ItemRenderer<T> = (
   item: T,
@@ -83,16 +91,19 @@ export type ItemRenderer<T> = (
 type DataTableInput<T = any> =
   | {
       dataSource: DataSource<T, T[keyof T]>;
+      viewId?: string;
       records?: undefined;
       recordsKey?: undefined;
     }
   | {
       records: readonly T[];
       recordsKey?: keyof T;
+      viewId?: string;
       dataSource?: undefined;
     };
 
 export type DataTableColumn<T = any> = {
+  //this can be a dotted path into a nest objects. e.g foo.bar
   key: keyof T & string;
   // possible future extension: getValue(row) (and free-form key) to support computed columns
   onRender?: (row: T, selected: boolean, index: number) => React.ReactNode;
@@ -134,6 +145,9 @@ export function DataTable<T extends object>(
 ): React.ReactElement {
   const {onRowStyle, onSelect, onCopyRows, onContextMenu} = props;
   const dataSource = normalizeDataSourceInput(props);
+  const dataView = props?.viewId
+    ? dataSource.getAdditionalView(props.viewId)
+    : dataSource.view;
   useAssertStableRef(dataSource, 'dataSource');
   useAssertStableRef(onRowStyle, 'onRowStyle');
   useAssertStableRef(props.onSelect, 'onRowSelect');
@@ -144,7 +158,7 @@ export function DataTable<T extends object>(
   const isUnitTest = useInUnitTest();
 
   // eslint-disable-next-line
-  const scope = isUnitTest ? "" : usePluginInstanceMaybe()?.pluginKey ?? "";
+  const scope = isUnitTest ? '' : usePluginInstanceMaybe()?.definition.id ?? '';
   const virtualizerRef = useRef<DataSourceVirtualizer | undefined>();
   const [tableState, dispatch] = useReducer(
     dataTableManagerReducer as DataTableReducer<T>,
@@ -152,6 +166,7 @@ export function DataTable<T extends object>(
     () =>
       createInitialState({
         dataSource,
+        dataView,
         defaultColumns: props.columns,
         onSelect,
         scope,
@@ -163,17 +178,39 @@ export function DataTable<T extends object>(
 
   const stateRef = useRef(tableState);
   stateRef.current = tableState;
+  const searchInputRef = useRef<InputRef>(null) as MutableRefObject<InputRef>;
   const lastOffset = useRef(0);
   const dragging = useRef(false);
 
   const [tableManager] = useState(() =>
-    createDataTableManager(dataSource, dispatch, stateRef),
+    createDataTableManager(dataView, dispatch, stateRef),
   );
-  if (props.tableManagerRef) {
+  // Make sure this is the main table
+  if (props.tableManagerRef && !props.viewId) {
     (props.tableManagerRef as MutableRefObject<any>).current = tableManager;
   }
 
   const {columns, selection, searchValue, sorting} = tableState;
+
+  const latestSelectionRef = useLatestRef(selection);
+  const latestOnSelectRef = useLatestRef(onSelect);
+  useEffect(() => {
+    if (dataView) {
+      const unsubscribe = dataView.addListener((change) => {
+        if (
+          change.type === 'update' &&
+          latestSelectionRef.current.items.has(change.index)
+        ) {
+          latestOnSelectRef.current?.(
+            getSelectedItem(dataView, latestSelectionRef.current),
+            getSelectedItems(dataView, latestSelectionRef.current),
+          );
+        }
+      });
+
+      return unsubscribe;
+    }
+  }, [dataView, latestSelectionRef, latestOnSelectRef]);
 
   const visibleColumns = useMemo(
     () => columns.filter((column) => column.visible),
@@ -265,10 +302,11 @@ export function DataTable<T extends object>(
     (e: React.KeyboardEvent<any>) => {
       let handled = true;
       const shiftPressed = e.shiftKey;
-      const outputSize = dataSource.view.size;
+      const outputSize = dataView.size;
+      const controlPressed = e.ctrlKey;
       const windowSize = props.scrollable
         ? virtualizerRef.current?.virtualItems.length ?? 0
-        : dataSource.view.size;
+        : dataView.size;
       if (!windowSize) {
         return;
       }
@@ -307,6 +345,21 @@ export function DataTable<T extends object>(
         case 'Escape':
           tableManager.clearSelection();
           break;
+        case 't':
+          if (controlPressed) {
+            tableManager.toggleSearchValue();
+          }
+          break;
+        case 'H':
+          tableManager.toggleHighlightSearch();
+          break;
+        case 'f':
+          if (controlPressed && searchInputRef?.current) {
+            searchInputRef?.current.focus();
+            tableManager.showSearchDropdown(true);
+            tableManager.setShowNumberedHistory(true);
+          }
+          break;
         default:
           handled = false;
       }
@@ -315,49 +368,81 @@ export function DataTable<T extends object>(
         e.preventDefault();
       }
     },
-    [dataSource, tableManager, props.scrollable],
+    [dataView, props.scrollable, tableManager],
   );
+
+  const [setFilter] = useState(() => (tableState: DataManagerState<T>) => {
+    const selectedEntry =
+      tableState.selection.current >= 0
+        ? dataView.getEntry(tableState.selection.current)
+        : null;
+    dataView.setFilter(
+      computeDataTableFilter(
+        tableState.searchValue,
+        tableState.useRegex,
+        tableState.columns,
+      ),
+    );
+    // TODO: in the future setFilter effects could be async, at the moment it isn't,
+    // so we can safely assume the internal state of the dataView is updated with the
+    // filter changes and try to find the same entry back again
+    if (selectedEntry) {
+      const selectionIndex = dataView.getViewIndexOfEntry(selectedEntry);
+      tableManager.selectItem(selectionIndex, false, false);
+      // we disable autoScroll as is it can accidentally be annoying if it was never turned off and
+      // filter causes items to not fill the available space
+      dispatch({type: 'setAutoScroll', autoScroll: false});
+      virtualizerRef.current?.scrollToIndex(selectionIndex, {align: 'center'});
+      setTimeout(() => {
+        virtualizerRef.current?.scrollToIndex(selectionIndex, {
+          align: 'center',
+        });
+      }, 0);
+    }
+    // TODO: could do the same for multiselections, doesn't seem to be requested so far
+  });
 
   const [debouncedSetFilter] = useState(() => {
     // we don't want to trigger filter changes too quickly, as they can be pretty expensive
     // and would block the user from entering text in the search bar for example
     // (and in the future would really benefit from concurrent mode here :))
-    const setFilter = (
-      search: string,
-      useRegex: boolean,
-      columns: DataTableColumn<T>[],
-    ) => {
-      dataSource.view.setFilter(
-        computeDataTableFilter(search, useRegex, columns),
-      );
-    };
+    // leading is set to true so that an initial filter is immediately applied and a flash of wrong content is prevented
+    // this also makes clear act faster
     return isUnitTest ? setFilter : debounce(setFilter, 250);
   });
+
   useEffect(
     function updateFilter() {
-      debouncedSetFilter(
-        tableState.searchValue,
-        tableState.useRegex,
-        tableState.columns,
-      );
+      if (!dataView.isFiltered) {
+        setFilter(tableState);
+      } else {
+        debouncedSetFilter(tableState);
+      }
     },
     // Important dep optimization: we don't want to recalc filters if just the width or visibility changes!
     // We pass entire state.columns to computeDataTableFilter, but only changes in the filter are a valid cause to compute a new filter function
     // eslint-disable-next-line
-    [tableState.searchValue, tableState.useRegex, ...tableState.columns.map((c) => c.filters), ...tableState.columns.map((c => c.inversed))],
+    [
+      tableState.searchValue,
+      tableState.useRegex,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ...tableState.columns.map((c) => c.filters),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ...tableState.columns.map((c) => c.inversed),
+    ],
   );
 
   useEffect(
     function updateSorting() {
       if (tableState.sorting === undefined) {
-        dataSource.view.setSortBy(undefined);
-        dataSource.view.setReversed(false);
+        dataView.setSortBy(undefined);
+        dataView.setReversed(false);
       } else {
-        dataSource.view.setSortBy(tableState.sorting.key);
-        dataSource.view.setReversed(tableState.sorting.direction === 'desc');
+        dataView.setSortBy(tableState.sorting.key);
+        dataView.setReversed(tableState.sorting.direction === 'desc');
       }
     },
-    [dataSource, tableState.sorting],
+    [dataView, tableState.sorting],
   );
 
   const isMounted = useRef(false);
@@ -365,13 +450,13 @@ export function DataTable<T extends object>(
     function triggerSelection() {
       if (isMounted.current) {
         onSelect?.(
-          getSelectedItem(dataSource, tableState.selection),
-          getSelectedItems(dataSource, tableState.selection),
+          getSelectedItem(dataView, tableState.selection),
+          getSelectedItems(dataView, tableState.selection),
         );
       }
       isMounted.current = true;
     },
-    [onSelect, dataSource, tableState.selection],
+    [onSelect, dataView, tableState.selection],
   );
 
   // The initialScrollPosition is used to both capture the initial px we want to scroll to,
@@ -398,7 +483,7 @@ export function DataTable<T extends object>(
 
   /** Range finder */
   const [range, setRange] = useState('');
-  const hideRange = useRef<NodeJS.Timeout>();
+  const hideRange = useRef<any>();
 
   const onRangeChange = useCallback(
     (start: number, end: number, total: number, offset) => {
@@ -421,29 +506,59 @@ export function DataTable<T extends object>(
     [props.enableAutoScroll],
   );
 
+  const sidePanelToggle = useMemo(
+    () => (
+      <Menu.Item key="toggle side by side">
+        <Layout.Horizontal
+          gap
+          center
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}>
+          Side By Side View
+          <Switch
+            checked={tableState.sideBySide}
+            size="small"
+            onChange={() => {
+              tableManager.toggleSideBySide();
+            }}
+          />
+        </Layout.Horizontal>
+      </Menu.Item>
+    ),
+    [tableManager, tableState.sideBySide],
+  );
+
   /** Context menu */
   const contexMenu = isUnitTest
     ? undefined
     : // eslint-disable-next-line
-    useCallback(
+      useCallback(
         () =>
           tableContextMenuFactory(
-            dataSource,
+            dataView,
             dispatch,
             selection,
+            tableState.highlightSearchSetting,
+            tableState.filterSearchHistory,
             tableState.columns,
             visibleColumns,
             onCopyRows,
             onContextMenu,
+            props.enableMultiPanels ? sidePanelToggle : undefined,
           ),
         [
-          dataSource,
-          dispatch,
+          dataView,
           selection,
+          tableState.highlightSearchSetting,
+          tableState.filterSearchHistory,
           tableState.columns,
           visibleColumns,
           onCopyRows,
           onContextMenu,
+          props.enableMultiPanels,
+          sidePanelToggle,
         ],
       );
 
@@ -456,9 +571,13 @@ export function DataTable<T extends object>(
       savePreferences(stateRef.current, lastOffset.current);
       // if the component unmounts, we reset the SFRW pipeline to
       // avoid wasting resources in the background
-      dataSource.view.reset();
-      // clean ref
-      if (props.tableManagerRef) {
+      dataView.reset();
+      if (props.viewId) {
+        // this is a side panel
+        dataSource.deleteView(props.viewId);
+      }
+      // clean ref && Make sure this is the main table
+      if (props.tableManagerRef && !props.viewId) {
         (props.tableManagerRef as MutableRefObject<any>).current = undefined;
       }
     };
@@ -473,11 +592,20 @@ export function DataTable<T extends object>(
         <TableSearch
           searchValue={searchValue}
           useRegex={tableState.useRegex}
+          filterSearchHistory={tableState.filterSearchHistory}
+          showHistory={tableState.showSearchHistory}
+          showNumbered={tableState.showNumberedHistory}
           dispatch={dispatch as any}
+          searchHistory={tableState.searchHistory}
           contextMenu={props.enableContextMenu ? contexMenu : undefined}
-          extraActions={props.extraActions}
+          extraActions={!props.viewId ? props.extraActions : undefined}
+          searchInputRef={searchInputRef}
         />
       )}
+    </Layout.Container>
+  );
+  const columnHeaders = (
+    <Layout.Container>
       {props.enableColumnHeaders && (
         <TableHead
           visibleColumns={visibleColumns}
@@ -495,13 +623,14 @@ export function DataTable<T extends object>(
 
   const emptyRenderer =
     props.onRenderEmpty === undefined
-      ? props.onRenderEmpty
+      ? createDefaultEmptyRenderer(tableManager)
       : props.onRenderEmpty;
-  const mainSection = props.scrollable ? (
-    <Layout.Top>
-      {header}
+
+  let mainSection: JSX.Element;
+  if (props.scrollable) {
+    const dataSourceRenderer = (
       <DataSourceRendererVirtual<T, TableRowRenderContext<T>>
-        dataSource={dataSource}
+        dataView={dataView}
         autoScroll={tableState.autoScroll && !dragging.current}
         useFixedRowHeight={!tableState.usesWrapping}
         defaultRowHeight={DEFAULT_ROW_HEIGHT}
@@ -513,25 +642,59 @@ export function DataTable<T extends object>(
         onUpdateAutoScroll={onUpdateAutoScroll}
         emptyRenderer={emptyRenderer}
       />
-    </Layout.Top>
-  ) : (
-    <Layout.Container>
-      {header}
-      <DataSourceRendererStatic<T, TableRowRenderContext<T>>
-        dataSource={dataSource}
-        useFixedRowHeight={!tableState.usesWrapping}
-        defaultRowHeight={DEFAULT_ROW_HEIGHT}
-        context={renderingConfig}
-        itemRenderer={itemRenderer}
-        onKeyDown={onKeyDown}
-        emptyRenderer={emptyRenderer}
-      />
-    </Layout.Container>
-  );
+    );
 
-  return (
-    <Layout.Container grow={props.scrollable}>
-      {mainSection}
+    mainSection = props.enableHorizontalScroll ? (
+      <Layout.Top>
+        {header}
+        <Layout.ScrollContainer horizontal vertical={false}>
+          <Layout.Top>
+            {columnHeaders}
+            {dataSourceRenderer}
+          </Layout.Top>
+        </Layout.ScrollContainer>
+      </Layout.Top>
+    ) : (
+      <Layout.Top>
+        <div>
+          {header}
+          {columnHeaders}
+        </div>
+        {dataSourceRenderer}
+      </Layout.Top>
+    );
+  } else {
+    mainSection = (
+      <Layout.Container>
+        {header}
+        {columnHeaders}
+        <DataSourceRendererStatic<T, TableRowRenderContext<T>>
+          dataView={dataView}
+          useFixedRowHeight={!tableState.usesWrapping}
+          defaultRowHeight={DEFAULT_ROW_HEIGHT}
+          context={renderingConfig}
+          maxRecords={dataSource.limit}
+          itemRenderer={itemRenderer}
+          onKeyDown={onKeyDown}
+          emptyRenderer={emptyRenderer}
+        />
+      </Layout.Container>
+    );
+  }
+  const mainPanel = (
+    <Layout.Container grow={props.scrollable} style={{position: 'relative'}}>
+      <HighlightProvider
+        text={
+          tableState.highlightSearchSetting.highlightEnabled
+            ? tableState.searchValue
+            : ''
+        }
+        highlightColor={
+          tableState.highlightSearchSetting.color ||
+          theme.searchHighlightBackground.yellow
+        }>
+        {mainSection}
+      </HighlightProvider>
       {props.enableAutoScroll && (
         <AutoScroller>
           <PushpinFilled
@@ -547,16 +710,27 @@ export function DataTable<T extends object>(
       {range && !isUnitTest && <RangeFinder>{range}</RangeFinder>}
     </Layout.Container>
   );
+  return props.enableMultiPanels && tableState.sideBySide ? (
+    //TODO: Make the panels resizable by having a dynamic maxWidth for Layout.Right/Left possibly?
+    <Layout.Horizontal style={{height: '100%'}}>
+      {mainPanel}
+      {<DataTable<T> viewId={'1'} {...props} enableMultiPanels={false} />}
+    </Layout.Horizontal>
+  ) : (
+    mainPanel
+  );
 }
 
 DataTable.defaultProps = {
   scrollable: true,
   enableSearchbar: true,
   enableAutoScroll: false,
+  enableHorizontalScroll: true,
   enableColumnHeaders: true,
   enableMultiSelect: true,
   enableContextMenu: true,
-  onRenderEmpty: emptyRenderer,
+  enablePersistSettings: true,
+  onRenderEmpty: undefined,
 } as Partial<DataTableProps<any>>;
 
 /* eslint-disable react-hooks/rules-of-hooks */
@@ -598,16 +772,27 @@ function syncRecordsToDataSource<T>(
   }
 }
 
-function emptyRenderer(dataSource: DataSource<any>) {
-  return <EmptyTable dataSource={dataSource} />;
+function createDefaultEmptyRenderer<T>(dataTableManager?: DataTableManager<T>) {
+  return (dataView?: _DataSourceView<T, T[keyof T]>) => (
+    <EmptyTable dataView={dataView} dataManager={dataTableManager} />
+  );
 }
 
-function EmptyTable({dataSource}: {dataSource: DataSource<any>}) {
+function EmptyTable<T>({
+  dataView,
+  dataManager,
+}: {
+  dataView?: _DataSourceView<T, T[keyof T]>;
+  dataManager?: DataTableManager<T>;
+}) {
+  const resetFilters = useCallback(() => {
+    dataManager?.resetFilters();
+  }, [dataManager]);
   return (
     <Layout.Container
       center
       style={{width: '100%', padding: 40, color: theme.textColorSecondary}}>
-      {dataSource.size === 0 ? (
+      {dataView?.size === 0 ? (
         <>
           <CoffeeOutlined style={{fontSize: '2em', margin: 8}} />
           <Typography.Text type="secondary">No records yet</Typography.Text>
@@ -616,7 +801,12 @@ function EmptyTable({dataSource}: {dataSource: DataSource<any>}) {
         <>
           <SearchOutlined style={{fontSize: '2em', margin: 8}} />
           <Typography.Text type="secondary">
-            No records match the current search / filter criteria
+            No records match the current search / filter criteria.
+          </Typography.Text>
+          <Typography.Text>
+            <Typography.Link onClick={resetFilters}>
+              Reset filters
+            </Typography.Link>
           </Typography.Text>
         </>
       )}

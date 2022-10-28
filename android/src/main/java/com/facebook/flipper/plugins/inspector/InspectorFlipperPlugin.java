@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,6 +10,8 @@ package com.facebook.flipper.plugins.inspector;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +26,7 @@ import com.facebook.flipper.core.FlipperReceiver;
 import com.facebook.flipper.core.FlipperResponder;
 import com.facebook.flipper.plugins.common.MainThreadFlipperReceiver;
 import com.facebook.flipper.plugins.inspector.descriptors.ApplicationDescriptor;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +40,7 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
   private DescriptorMapping mDescriptorMapping;
   private ObjectTracker mObjectTracker;
   private String mHighlightedId;
+  private boolean mHighlightedAlignmentMode;
   TouchOverlayView mTouchOverlay;
   private FlipperConnection mConnection;
   private @Nullable List<ExtensionCommand> mExtensionCommands;
@@ -147,6 +151,7 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
     connection.receive("getSearchResults", mGetSearchResults);
     connection.receive("getAXRoot", mGetAXRoot);
     connection.receive("getAXNodes", mGetAXNodes);
+    connection.receive("getSnapshot", mGetSnapshot);
     connection.receive("onRequestAXFocus", mOnRequestAXFocus);
     connection.receive(
         "shouldShowLithoAccessibilitySettings", mShouldShowLithoAccessibilitySettings);
@@ -414,6 +419,47 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
             setHighlighted(nodeId, true, isAlignmentMode);
           }
           mHighlightedId = nodeId;
+          mHighlightedAlignmentMode = isAlignmentMode;
+
+          responder.success();
+        }
+      };
+
+  final FlipperReceiver mGetSnapshot =
+      new MainThreadFlipperReceiver() {
+        @Override
+        public void onReceiveOnMainThread(final FlipperObject params, FlipperResponder responder)
+            throws Exception {
+          final String nodeId = params.getString("id");
+
+          if (mHighlightedId != null) {
+            setHighlighted(mHighlightedId, false, false);
+          }
+
+          try {
+            final Bitmap bitmap = getSnapshot(nodeId, true);
+            if (bitmap != null) {
+              ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+              bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+              byte[] byteArray = byteArrayOutputStream.toByteArray();
+              final String base64 = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+              responder.success(
+                  new FlipperObject.Builder().put("id", nodeId).put("snapshot", base64).build());
+            } else {
+              throw new Exception("An error occurred whilst trying to encode snapshot");
+            }
+          } catch (Exception ex) {
+            responder.error(
+                new FlipperObject.Builder()
+                    .put("error", "unable to obtain snapshpt for object")
+                    .put("id", nodeId)
+                    .build());
+          } finally {
+            if (mHighlightedId != null) {
+              setHighlighted(mHighlightedId, true, mHighlightedAlignmentMode);
+            }
+          }
         }
       };
 
@@ -546,12 +592,43 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
     descriptor.setHighlighted(obj, highlighted, isAlignmentMode);
   }
 
+  private @Nullable Bitmap getSnapshot(final String id, final boolean includeChildren)
+      throws Exception {
+    if (id == null) {
+      return null;
+    }
+
+    final Object obj = mObjectTracker.get(id);
+    if (obj == null) {
+      return null;
+    }
+
+    final NodeDescriptor<Object> descriptor = descriptorForObject(obj);
+    if (descriptor == null) {
+      return null;
+    }
+
+    try {
+      return descriptor.getSnapshot(obj, includeChildren);
+    } catch (java.lang.AbstractMethodError error) {
+      /* There may be some descriptors which may not provide an implementation.
+       * In those cases, java.lang.AbstractMethodError will be thrown which
+       * does not inherit from java.lang.Exception hence will not be caught
+       * by the try/catch block of the caller.
+       */
+      return null;
+    }
+  }
+
   private boolean hasAXNode(FlipperObject node) {
     FlipperObject extraInfo = node.getObject("extraInfo");
     return extraInfo != null && extraInfo.getBoolean("linkedNode");
   }
 
   public SearchResultNode searchTree(String query, Object obj, boolean axEnabled) throws Exception {
+    if (obj == null) {
+      return null;
+    }
     final NodeDescriptor descriptor = descriptorForObject(obj);
     List<SearchResultNode> childTrees = null;
     boolean isMatch = descriptor.matches(query, obj);

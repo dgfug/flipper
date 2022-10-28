@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -23,11 +23,11 @@ import {
 import {sleep} from 'flipper';
 
 import util from 'util';
-import {exec} from 'promisify-child-process';
 
 import FirefoxClient from 'firefox-client';
 import BaseClientMethods from 'firefox-client/lib/client-methods';
 import extend from 'firefox-client/lib/extend';
+import {getFlipperLib} from 'flipper-plugin';
 
 // This uses legacy `extend` from `firefox-client`, since this seems to be what the implementation expects
 // It's probably possible to rewrite this in a modern way and properly type it, but for now leaving this as it is
@@ -262,7 +262,7 @@ export default class AllocationsPlugin extends FlipperDevicePlugin<
   }
 
   async init() {
-    await exec(
+    await getFlipperLib().remoteServerContext.childProcess.exec(
       'adb forward tcp:6000 localfilesystem:/data/local/debugger-socket',
     );
     await this.connectToDebugApi();

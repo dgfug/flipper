@@ -1,3 +1,229 @@
+# 0.172.0 (26/10/2022)
+
+ * [D40394563](https://github.com/facebook/flipper/search?q=D40394563&type=Commits)
+ * [D40552235](https://github.com/facebook/flipper/search?q=D40552235&type=Commits) -  Add a universal debug export button
+ * [D40715523](https://github.com/facebook/flipper/search?q=D40715523&type=Commits) -  Stop doing eval to load server add-ons
+
+
+# 0.171.0 (17/10/2022)
+
+ * [D40338164](https://github.com/facebook/flipper/search?q=D40338164&type=Commits) -  Better error message for EADDRINUSE
+ * [D40340272](https://github.com/facebook/flipper/search?q=D40340272&type=Commits) -  Enhance a warning about taking too much time to process plugin messages
+ * [D40341873](https://github.com/facebook/flipper/search?q=D40341873&type=Commits) -  Ignore persistToLocalStorage in headless mode
+
+
+# 0.169.0 (7/10/2022)
+
+ * [D40099777](https://github.com/facebook/flipper/search?q=D40099777&type=Commits) -  Update com.vanniktech:gradle-maven-publish-plugin
+ * [D39835294](https://github.com/facebook/flipper/search?q=D39835294&type=Commits)
+
+
+# 0.168.0 (4/10/2022)
+
+ * [D40019423](https://github.com/facebook/flipper/search?q=D40019423&type=Commits) -  Upgrade to gradle plugin 7.3.0
+ * [D40057817](https://github.com/facebook/flipper/search?q=D40057817&type=Commits) -  Provide `@emotion/css` to plugins
+
+
+# 0.167.0 (29/9/2022)
+
+ * [D39587418](https://github.com/facebook/flipper/search?q=D39587418&type=Commits)
+ * [D39809292](https://github.com/facebook/flipper/search?q=D39809292&type=Commits) -  Use global window event handlers instead of listeners
+ * [D39883905](https://github.com/facebook/flipper/search?q=D39883905&type=Commits) -  Fixed a bug in the nested highlighting of the data inspector, previously it could remain highlighted while moving the mouse away quickly and multiple highlights could be visible at the same time
+
+
+# 0.166.0 (20/9/2022)
+
+ * [D39633821](https://github.com/facebook/flipper/search?q=D39633821&type=Commits) -  Fix plugin loading with experimental flipper-server disabled
+
+
+# 0.160.0 (18/8/2022)
+
+ * [D38746572](https://github.com/facebook/flipper/search?q=D38746572&type=Commits) -  Add kotlin support for the android library
+ * [D38784319](https://github.com/facebook/flipper/search?q=D38784319&type=Commits) -  Fixed reload & zoom in Flipper Desktop application.
+ * [D38825940](https://github.com/facebook/flipper/search?q=D38825940&type=Commits) -  Stop applications from disconnecting if a single plugin message cannot be processed.
+
+
+# 0.157.0 (3/8/2022)
+
+ * [D38207087](https://github.com/facebook/flipper/search?q=D38207087&type=Commits) -  Added icon for showing search result context(only triggered by keyboard shortcut before). Added tool tips to search bar icons.
+ * [D38076567](https://github.com/facebook/flipper/search?q=D38076567&type=Commits) -  Added option in Flipper settings to persist device data upon reconnection instead of wiping everything.
+
+
+# 0.156.0 (27/7/2022)
+
+ * [D37282740](https://github.com/facebook/flipper/search?q=D37282740&type=Commits) -  [Internal]
+ * [D37685390](https://github.com/facebook/flipper/search?q=D37685390&type=Commits) -  Introduced side by side view feature for `DataTable`. There is now a new boolean for `DataTable` props called `enableMultiPanels`. If this is passed in, then the table will have an option to open a different "side panel" using a completely different dataview which allows different filters, searches, etc.
+
+
+# 0.155.0 (19/7/2022)
+
+ * [D37855742](https://github.com/facebook/flipper/search?q=D37855742&type=Commits)
+
+
+# 0.154.0 (13/7/2022)
+
+
+
+# 0.153.0 (6/7/2022)
+
+ * [D37383163](https://github.com/facebook/flipper/search?q=D37383163&type=Commits) -  DataTable will now have option to have its search terms highlighted in the search results by toggling and customizing the highlight colors in the menu bar
+ * [D37516868](https://github.com/facebook/flipper/search?q=D37516868&type=Commits) -  Rotate flipper-server logs
+ * [D37552492](https://github.com/facebook/flipper/search?q=D37552492&type=Commits) -  Fixed 'free text search' for data table. E.g network plugin
+
+
+# 0.152.0 (29/6/2022)
+
+ * [D37485571](https://github.com/facebook/flipper/search?q=D37485571&type=Commits) -  Add Flipper logs export to file
+
+
+# 0.151.1 (27/6/2022)
+
+ * [D37417459](https://github.com/facebook/flipper/search?q=D37417459&type=Commits) -  Flipper Server Mac App no longer bounces in Dock
+
+
+# 0.149.0 (8/6/2022)
+
+ * [D36736495](https://github.com/facebook/flipper/search?q=D36736495&type=Commits) -  DataTable: more pronounced background color for selections
+ * [D36736496](https://github.com/facebook/flipper/search?q=D36736496&type=Commits) -  DataTable: Data tables will now preserve the current selection and scroll it into view when changing the search filter.
+ * [D36736494](https://github.com/facebook/flipper/search?q=D36736494&type=Commits) -  DataTable: pressing the control key can be used to temporarily turn the current search filter on and off.
+ * [D36736821](https://github.com/facebook/flipper/search?q=D36736821&type=Commits) -  DataTable will now keep a history of search items when hitting <return> to search. Use the history button to bring up the history.
+ * [D36781555](https://github.com/facebook/flipper/search?q=D36781555&type=Commits) -  Fixed bug when copying value from context menu in detail sidebar
+ * [D36781553](https://github.com/facebook/flipper/search?q=D36781553&type=Commits) -  Added hover state to detail inspector
+
+
+# 0.148.0 (1/6/2022)
+
+ * [D36760209](https://github.com/facebook/flipper/search?q=D36760209&type=Commits) -  Add a deprecation warning for deprecated plugins.
+ * [D36593625](https://github.com/facebook/flipper/search?q=D36593625&type=Commits) -  Upgrade electron to 18.2.0.
+
+
+# 0.147.0 (25/5/2022)
+
+ * [D36600535](https://github.com/facebook/flipper/search?q=D36600535&type=Commits)
+ * [D36602929](https://github.com/facebook/flipper/search?q=D36602929&type=Commits)
+ * [D36596972](https://github.com/facebook/flipper/search?q=D36596972&type=Commits) -  Show alert in Launch Emulator dialogue if no SDKs are enabled
+ * [D36598855](https://github.com/facebook/flipper/search?q=D36598855&type=Commits) -  Loading state for emulator launch dialogue
+ * [D36599925](https://github.com/facebook/flipper/search?q=D36599925&type=Commits) -  Add link to troubleshooting page when no emulators are available.
+
+
+# 0.146.1 (20/5/2022)
+
+ * [D36513795](https://github.com/facebook/flipper/search?q=D36513795&type=Commits) -  Refactor tic-tac-toe plugin to Sandy architecture
+
+
+# 0.146.0 (18/5/2022)
+
+ * [D36060992](https://github.com/facebook/flipper/search?q=D36060992&type=Commits) -  Remove OpenSSL file BIO operations
+ * [D36369508](https://github.com/facebook/flipper/search?q=D36369508&type=Commits) -  Fixed NPE during search in layout plugin (Android)
+
+
+# 0.145.0 (5/5/2022)
+
+ * [D36001637](https://github.com/facebook/flipper/search?q=D36001637&type=Commits) -  Execute :third-party:prepare before :configureCMake task on Android
+
+
+# 0.144.0 (27/4/2022)
+
+ * [D35810827](https://github.com/facebook/flipper/search?q=D35810827&type=Commits) -  Fixes an issue on the databases plugin when there is no selected database.
+
+
+# 0.143.0 (20/4/2022)
+
+ * [D35546817](https://github.com/facebook/flipper/search?q=D35546817&type=Commits) -  Check if there's a process listening at the specified port before attempting to establish a websocket connection on iOS
+ * [D35548148](https://github.com/facebook/flipper/search?q=D35548148&type=Commits) -  Certificate signing request response to be processed on the right event loop.
+
+
+# 0.141.0 (30/3/2022)
+
+ * [D34990372](https://github.com/facebook/flipper/search?q=D34990372&type=Commits) -  Add view preview/snapshot for the Layout plugin on iOS.
+ * [D35009246](https://github.com/facebook/flipper/search?q=D35009246&type=Commits) -  Add view preview/snapshot for the Layout plugin on Android.
+
+
+# 0.140.0 (23/3/2022)
+
+ * [D34932896](https://github.com/facebook/flipper/search?q=D34932896&type=Commits) -  Make it possible to recover from malformed JSON in server requests
+ * [D34932895](https://github.com/facebook/flipper/search?q=D34932895&type=Commits) -  Respect --no-open during server startup
+
+
+# 0.138.0 (9/3/2022)
+
+ * [D34627820](https://github.com/facebook/flipper/search?q=D34627820&type=Commits) -  Add Support Ukraine banner to website
+
+
+# 0.137.0 (2/3/2022)
+
+ * [D34418118](https://github.com/facebook/flipper/search?q=D34418118&type=Commits) -  Remove rsocket references from xplat
+ * [D33656299](https://github.com/facebook/flipper/search?q=D33656299&type=Commits) -  Remove rsocket dependency for iOS
+ * [D34418565](https://github.com/facebook/flipper/search?q=D34418565&type=Commits) -  Remove rsocket dependency for Android
+
+
+# 0.136.0 (23/2/2022)
+
+ * [D34340068](https://github.com/facebook/flipper/search?q=D34340068&type=Commits) -  Log 'Unable to extract the client query from the request URL' as warning
+ * [D34345316](https://github.com/facebook/flipper/search?q=D34345316&type=Commits) -  Remove RSocket documentation references
+
+
+# 0.135.0 (16/2/2022)
+
+ * [D33655430](https://github.com/facebook/flipper/search?q=D33655430&type=Commits) -  Removes rsocket-fallback for mobile clients
+
+
+# 0.134.0 (14/2/2022)
+
+ * [D34143349](https://github.com/facebook/flipper/search?q=D34143349&type=Commits) -  Consume openssl from maven (prefab)
+
+
+# 0.133.0 (9/2/2022)
+
+ * [D33976028](https://github.com/facebook/flipper/search?q=D33976028&type=Commits) -  Fixed 'device still authorizing' errors showing up while connecting to an Android device
+ * [D33976460](https://github.com/facebook/flipper/search?q=D33976460&type=Commits) -  Don't show errors for clients that fail to connect in a timely fashion repeatedly.
+ * [D34080726](https://github.com/facebook/flipper/search?q=D34080726&type=Commits) -  Release an existing client before attempting a secure connection
+
+
+# 0.132.0 (2/2/2022)
+
+ * [D33890235](https://github.com/facebook/flipper/search?q=D33890235&type=Commits) -  Fallback to RSockets if cert exchange fails even if the connection was successful.
+
+
+# 0.128.0 (12/1/2022)
+
+ * [D33348923](https://github.com/facebook/flipper/search?q=D33348923&type=Commits) -  More clearly communicate if flipper server failed to start (e.d. due to port already taken, openssl not being available)
+ * [D33364781](https://github.com/facebook/flipper/search?q=D33364781&type=Commits) -  Improved column widths in data tables
+ * [D33364780](https://github.com/facebook/flipper/search?q=D33364780&type=Commits) -  Data tables will now remember their configuration by default and share it across different applications
+ * [D33297125](https://github.com/facebook/flipper/search?q=D33297125&type=Commits) -  [experimental] It is now possible to run a full fledged Flipper as node + browser appication by using `npx flipper-server`
+ * [D33377718](https://github.com/facebook/flipper/search?q=D33377718&type=Commits) -  Fixed an issue where changing settings wasn't persisted when using "Apply + Restart
+ * [D33368216](https://github.com/facebook/flipper/search?q=D33368216&type=Commits) -  most data tables allow for horizontal scrolling now if they run out of space
+ * [D33368215](https://github.com/facebook/flipper/search?q=D33368215&type=Commits) -  make sure database plugin is horizontally scrollable
+ * [D33405760](https://github.com/facebook/flipper/search?q=D33405760&type=Commits) -  Fixes an issue whereas the url encoding was incorrect for UTF-8
+
+
+# 0.127.0 (22/12/2021)
+
+ * [D33089810](https://github.com/facebook/flipper/search?q=D33089810&type=Commits) -  Move crash watcher to the server. Add 'device-crash' event. Add 'device-start-crash-watcher', 'device-stop-crash-watcher' commands. Add 'onDeviceCrash' method to Plugin Client.
+ * [D33132506](https://github.com/facebook/flipper/search?q=D33132506&type=Commits) -  Allow only a single crash watcher and a single log listener per device. Start log listener and crash watcher for every device upon connection. Remove commands to start/stop them externally.
+ * [D33276414](https://github.com/facebook/flipper/search?q=D33276414&type=Commits) -  Work-around for missing `origin` header problem https://github.com/facebook/flipper/issues/3189; causing Metro to crash when Flipper tries to connect
+
+
+# 0.126.0 (17/12/2021)
+
+ * [D33158280](https://github.com/facebook/flipper/search?q=D33158280&type=Commits) -  Fixed issue where a missing ANDROID_SDK_ROOT env var made it impossible to launch emulators
+ * [D33158445](https://github.com/facebook/flipper/search?q=D33158445&type=Commits) -  Register shortcuts only for Flipper application instead of globally. Fixes https://github.com/facebook/flipper/issues/3090
+
+
+# 0.125.0 (11/12/2021)
+
+ * [D32881744](https://github.com/facebook/flipper/search?q=D32881744&type=Commits) -  Remove child_process usage  from ReactDevTools plugin
+ * [D32881860](https://github.com/facebook/flipper/search?q=D32881860&type=Commits) -  Remove child_process usage  from kaios-allocation, kaios-ram plugins
+ * [D32988478](https://github.com/facebook/flipper/search?q=D32988478&type=Commits) -  Expose env info and FS rm command to flipper plugins.
+ * [D32987162](https://github.com/facebook/flipper/search?q=D32987162&type=Commits) -  Fixed issue where occasionally a plugin wouldn't open after starting Flipper
+
+
+# 0.124.0 (8/12/2021)
+
+ * [D32797863](https://github.com/facebook/flipper/search?q=D32797863&type=Commits) -  Better handling of screenshot taking in navigation
+ * [D32830690](https://github.com/facebook/flipper/search?q=D32830690&type=Commits) -  Close input stream after use which was causing strict mode policy violation crashes and possibly leaking resources.
+
+
 # 0.119.0 (10/11/2021)
 
  * [D32279009](https://github.com/facebook/flipper/search?q=D32279009&type=Commits) -  Removed a lot of false positive error reports

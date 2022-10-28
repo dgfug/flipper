@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -38,6 +38,7 @@ test('Correct top level API exposed', () => {
       "DetailSidebar",
       "Dialog",
       "ElementsInspector",
+      "FileSelector",
       "Layout",
       "MarkerTimeline",
       "MasterDetail",
@@ -51,12 +52,16 @@ test('Correct top level API exposed', () => {
       "Tracked",
       "TrackingScope",
       "batch",
+      "createControlledPromise",
       "createDataSource",
       "createState",
       "createTablePlugin",
       "getFlipperLib",
+      "isAtom",
+      "path",
       "produce",
       "renderReactRoot",
+      "safeStringify",
       "sleep",
       "styled",
       "textContent",
@@ -68,6 +73,7 @@ test('Correct top level API exposed', () => {
       "usePlugin",
       "useTrackedCallback",
       "useValue",
+      "uuid",
       "withTrackingScope",
     ]
   `);
@@ -75,6 +81,11 @@ test('Correct top level API exposed', () => {
   expect(exposedTypes.sort()).toMatchInlineSnapshot(`
     Array [
       "Atom",
+      "AtomPersistentStorage",
+      "CrashLog",
+      "CrashLogListener",
+      "CreatePasteArgs",
+      "CreatePasteResult",
       "DataDescriptionType",
       "DataInspectorExpanded",
       "DataTableColumn",
@@ -89,6 +100,7 @@ test('Correct top level API exposed', () => {
       "DevicePluginClient",
       "DeviceType",
       "DialogResult",
+      "DownloadFileResponse",
       "Draft",
       "ElementAttribute",
       "ElementData",
@@ -98,17 +110,22 @@ test('Correct top level API exposed', () => {
       "ElementsInspectorElement",
       "ElementsInspectorProps",
       "FileDescriptor",
+      "FileEncoding",
       "FlipperLib",
+      "FlipperPluginInstance",
+      "FlipperServerForServerAddOn",
       "HighlightManager",
       "Idler",
       "InteractionReport",
       "InteractionReporter",
       "Logger",
       "MenuEntry",
-      "MockedConsole",
       "NormalizedMenuEntry",
       "Notification",
       "PluginClient",
+      "RemoteServerContext",
+      "ServerAddOn",
+      "ServerAddOnPluginConnection",
     ]
   `);
 });

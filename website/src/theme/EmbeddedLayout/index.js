@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,9 +7,10 @@
 
 import React from 'react';
 import clsx from 'clsx';
-import LayoutProviders from '@theme/LayoutProviders';
-import useKeyboardNavigation from '@theme/hooks/useKeyboardNavigation';
+import LayoutProviders from '@theme/Layout/Provider';
+import Head from '@docusaurus/Head';
 import {ThemeClassNames} from '@docusaurus/theme-common';
+import {useKeyboardNavigation} from '@docusaurus/theme-common/internal';
 import './styles.css';
 
 function EmbeddedLayout(props) {
@@ -17,6 +18,9 @@ function EmbeddedLayout(props) {
   useKeyboardNavigation();
   return (
     <LayoutProviders>
+      <Head>
+        <meta name="robots" content="noindex" />
+      </Head>
       <div
         className={clsx(
           ThemeClassNames.wrapper.main,

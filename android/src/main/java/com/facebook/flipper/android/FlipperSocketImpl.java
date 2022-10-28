@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 package com.facebook.flipper.android;
 
+import android.net.TrafficStats;
 import android.util.Log;
 import com.facebook.flipper.BuildConfig;
 import com.facebook.flipper.core.FlipperObject;
@@ -17,6 +18,7 @@ import com.facebook.soloader.SoLoader;
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.InvalidAlgorithmParameterException;
@@ -87,7 +89,9 @@ class FlipperSocketImpl extends WebSocketClient implements FlipperSocket {
         String cert_client_pass = authenticationObject.getString("certificates_client_pass");
         String cert_ca_path = authenticationObject.getString("certificates_ca_path");
 
-        ks.load(new FileInputStream(cert_client_path), cert_client_pass.toCharArray());
+        try (InputStream clientCertificateStream = new FileInputStream(cert_client_path)) {
+          ks.load(clientCertificateStream, cert_client_pass.toCharArray());
+        }
 
         KeyManagerFactory kmf =
             KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -98,7 +102,14 @@ class FlipperSocketImpl extends WebSocketClient implements FlipperSocket {
 
         SSLSocketFactory factory = sslContext.getSocketFactory();
 
-        this.setSocketFactory(factory);
+        this.setSocketFactory(
+            new DelegatingSocketFactory(factory) {
+              @Override
+              protected Socket configureSocket(Socket socket) {
+                TrafficStats.setThreadStatsTag(SOCKET_TAG);
+                return socket;
+              }
+            });
       }
 
       this.connect();
@@ -148,9 +159,7 @@ class FlipperSocketImpl extends WebSocketClient implements FlipperSocket {
 
   @Override
   public void flipperDisconnect() {
-    /**
-     * Set an event handler that does nothing, not interested in getting more socket event messages.
-     */
+    this.mEventHandler.onConnectionEvent(FlipperSocketEventHandler.SocketEvent.CLOSE);
     this.mEventHandler =
         new FlipperSocketEventHandler() {
           @Override

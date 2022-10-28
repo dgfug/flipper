@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,7 @@
 import React, {createRef} from 'react';
 import {DataTable, DataTableColumn} from '../DataTable';
 import {render, act} from '@testing-library/react';
-import {createDataSource} from '../../../state/createDataSource';
+import {createDataSource} from 'flipper-plugin-core';
 import {computeDataTableFilter, DataTableManager} from '../DataTableManager';
 import {Button} from 'antd';
 import {sleep} from 'flipper-common';
@@ -49,21 +49,31 @@ test('update and append', async () => {
   {
     const elem = await rendering.findAllByText('test DataTable');
     expect(elem.length).toBe(1);
-    expect(elem[0].parentElement).toMatchInlineSnapshot(`
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
       <div
         class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
       >
         <div
-          class="css-9bipfg-TableBodyColumnContainer e1luu51r0"
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
           width="50%"
         >
-          test DataTable
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
         </div>
         <div
-          class="css-9bipfg-TableBodyColumnContainer e1luu51r0"
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
           width="50%"
         >
-          true
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            true
+          </span>
         </div>
       </div>
     `);
@@ -103,21 +113,31 @@ test('column visibility', async () => {
   {
     const elem = await rendering.findAllByText('test DataTable');
     expect(elem.length).toBe(1);
-    expect(elem[0].parentElement).toMatchInlineSnapshot(`
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
       <div
         class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
       >
         <div
-          class="css-9bipfg-TableBodyColumnContainer e1luu51r0"
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
           width="50%"
         >
-          test DataTable
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
         </div>
         <div
-          class="css-9bipfg-TableBodyColumnContainer e1luu51r0"
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
           width="50%"
         >
-          true
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            true
+          </span>
         </div>
       </div>
     `);
@@ -130,15 +150,20 @@ test('column visibility', async () => {
   {
     const elem = await rendering.findAllByText('test DataTable');
     expect(elem.length).toBe(1);
-    expect(elem[0].parentElement).toMatchInlineSnapshot(`
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
       <div
         class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
       >
         <div
-          class="css-9bipfg-TableBodyColumnContainer e1luu51r0"
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
           width="50%"
         >
-          test DataTable
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
         </div>
       </div>
     `);
@@ -151,7 +176,7 @@ test('column visibility', async () => {
   {
     const elem = await rendering.findAllByText('test DataTable');
     expect(elem.length).toBe(1);
-    expect(elem[0].parentElement?.children.length).toBe(2);
+    expect(elem[0].parentElement?.parentElement?.children.length).toBe(2);
   }
 });
 
@@ -285,15 +310,26 @@ test('search', async () => {
 });
 
 test('compute filters', () => {
+  const levelCol = {key: 'level'};
+  const titleCol = {key: 'title'};
+  const doneCol = {key: 'done'};
+  const baseColumns = [levelCol, titleCol, doneCol];
+
   const coffee = {
     level: 'info',
     title: 'Drink coffee',
     done: true,
+    extras: {
+      comment: 'tasty',
+    },
   };
   const espresso = {
     level: 'info',
     title: 'Make espresso',
     done: false,
+    extras: {
+      comment: 'dull',
+    },
   };
   const meet = {
     level: 'error',
@@ -320,52 +356,68 @@ test('compute filters', () => {
   ).toBeUndefined();
 
   {
-    const filter = computeDataTableFilter('tEsT', false, [])!;
+    const filter = computeDataTableFilter('tEsT', false, baseColumns)!;
     expect(data.filter(filter)).toEqual([]);
   }
-
   {
+    //no columns but should still find rows
     const filter = computeDataTableFilter('EE', false, [])!;
+    expect(data.filter(filter)).toEqual([coffee, meet]);
+  }
+  {
+    const filter = computeDataTableFilter('EE', false, baseColumns)!;
     expect(data.filter(filter)).toEqual([coffee, meet]);
   }
 
   {
-    const filter = computeDataTableFilter('D', false, [])!;
+    const filter = computeDataTableFilter('D', false, baseColumns)!;
+    expect(data.filter(filter)).toEqual([coffee]);
+  }
+
+  const commentCol = {key: 'extras.comment'};
+  {
+    // free search on value tasty in nested column
+    const filter = computeDataTableFilter('tasty', false, [
+      ...baseColumns,
+      commentCol,
+    ])!;
     expect(data.filter(filter)).toEqual([coffee]);
   }
 
   {
     // regex, positive (mind the double escaping of \\b)
-    const filter = computeDataTableFilter('..t', true, [])!;
+    const filter = computeDataTableFilter('..t', true, baseColumns)!;
     expect(data.filter(filter)).toEqual([meet]);
   }
   {
     // regex, words with 6 chars
-    const filter = computeDataTableFilter('\\w{6}', true, [])!;
+    const filter = computeDataTableFilter('\\w{6}', true, baseColumns)!;
     expect(data.filter(filter)).toEqual([coffee, espresso]);
   }
   {
     // no match
-    const filter = computeDataTableFilter('\\w{18}', true, [])!;
+    const filter = computeDataTableFilter('\\w{18}', true, baseColumns)!;
     expect(data.filter(filter)).toEqual([]);
   }
   {
     // invalid regex
-    const filter = computeDataTableFilter('bla/[', true, [])!;
+    const filter = computeDataTableFilter('bla/[', true, baseColumns)!;
     expect(data.filter(filter)).toEqual([]);
   }
   {
-    const filter = computeDataTableFilter('true', false, [])!;
+    const filter = computeDataTableFilter('true', false, baseColumns)!;
     expect(data.filter(filter)).toEqual([coffee]);
   }
 
   {
-    const filter = computeDataTableFilter('false', false, [])!;
+    const filter = computeDataTableFilter('false', false, baseColumns)!;
     expect(data.filter(filter)).toEqual([espresso, meet]);
   }
 
   {
     const filter = computeDataTableFilter('EE', false, [
+      levelCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -381,6 +433,8 @@ test('compute filters', () => {
   }
   {
     const filter = computeDataTableFilter('EE', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -401,6 +455,8 @@ test('compute filters', () => {
   }
   {
     const filter = computeDataTableFilter('', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -421,6 +477,8 @@ test('compute filters', () => {
   }
   {
     const filter = computeDataTableFilter('', false, [
+      levelCol,
+      titleCol,
       {
         key: 'done',
         filters: [
@@ -437,6 +495,8 @@ test('compute filters', () => {
   {
     // nothing selected anything will not filter anything out for that column
     const filter = computeDataTableFilter('', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -455,8 +515,30 @@ test('compute filters', () => {
     ])!;
     expect(filter).toBeUndefined();
   }
+
   {
+    //nested filter on comment
     const filter = computeDataTableFilter('', false, [
+      ...baseColumns,
+      {
+        key: 'extras.comment',
+        filters: [
+          {
+            enabled: true,
+            value: 'dull',
+            label: 'dull',
+          },
+        ],
+      },
+    ])!;
+    expect(data.filter(filter)).toEqual([espresso]);
+  }
+
+  {
+    //filter 'level' on values info and error which will match all records
+    const filter = computeDataTableFilter('', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -477,6 +559,7 @@ test('compute filters', () => {
   }
   {
     const filter = computeDataTableFilter('', false, [
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -503,6 +586,8 @@ test('compute filters', () => {
   {
     // inverse filter
     const filter = computeDataTableFilter('', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -520,6 +605,8 @@ test('compute filters', () => {
   {
     // inverse filter with search
     const filter = computeDataTableFilter('coffee', false, [
+      doneCol,
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -536,6 +623,7 @@ test('compute filters', () => {
   }
   {
     const filter = computeDataTableFilter('nonsense', false, [
+      titleCol,
       {
         key: 'level',
         filters: [
@@ -653,6 +741,8 @@ test('selection always has the latest state', () => {
   act(() => {
     ds.update(2, item3updated);
   });
+  expect(events.splice(0)).toEqual([[item3updated, [item3updated]]]);
+
   act(() => {
     ref.current!.addRangeToSelection(0, 0);
   });
@@ -661,5 +751,286 @@ test('selection always has the latest state', () => {
     [item1, [item1, item3updated]], // update reflected in callback!
   ]);
 
+  const item1updated = {
+    title: 'item 1 updated',
+    done: false,
+  };
+  act(() => {
+    ds.update(0, item1updated);
+  });
+  expect(events.splice(0)).toEqual([
+    [item1updated, [item1updated, item3updated]], // update reflected in callback!
+  ]);
+
   rendering.unmount();
+});
+
+test('open second panel and append', async () => {
+  const ds = createTestDataSource();
+  const ref = createRef<DataTableManager<Todo>>();
+  const rendering = render(
+    <DataTable
+      enableMultiPanels
+      dataSource={ds}
+      columns={columns}
+      tableManagerRef={ref}
+    />,
+  );
+  {
+    const elem = await rendering.findAllByText('test DataTable');
+    expect(elem.length).toBe(1);
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
+      <div
+        class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
+      >
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
+        </div>
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            true
+          </span>
+        </div>
+      </div>
+    `);
+  }
+  // hide done
+  act(() => {
+    ref.current?.toggleSideBySide();
+  });
+  expect(Object.keys(ds.additionalViews).length).toBeGreaterThan(0);
+  act(() => {
+    ds.append({
+      title: 'Drink coffee',
+      done: false,
+    });
+  });
+  {
+    const elem = await rendering.findAllByText('Drink coffee');
+    expect(elem.length).toBe(2);
+  }
+  act(() => {
+    ds.append({
+      title: 'Drink tea',
+      done: false,
+    });
+  });
+  {
+    const elem = await rendering.findAllByText('Drink tea');
+    expect(elem.length).toBe(2);
+  }
+});
+
+test('open second panel and update', async () => {
+  const ds = createTestDataSource();
+  const ref = createRef<DataTableManager<Todo>>();
+  const rendering = render(
+    <DataTable
+      enableMultiPanels
+      dataSource={ds}
+      columns={columns}
+      tableManagerRef={ref}
+    />,
+  );
+  {
+    const elem = await rendering.findAllByText('test DataTable');
+    expect(elem.length).toBe(1);
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
+      <div
+        class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
+      >
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
+        </div>
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            true
+          </span>
+        </div>
+      </div>
+    `);
+  }
+  // hide done
+  act(() => {
+    ds.append({
+      title: 'Drink coffee',
+      done: false,
+    });
+  });
+  {
+    const elems = await rendering.findAllByText('Drink coffee');
+    expect(elems.length).toBe(1);
+  }
+  act(() => {
+    ref.current?.toggleSideBySide();
+  });
+  expect(Object.keys(ds.additionalViews).length).toBeGreaterThan(0);
+  {
+    const elems = await rendering.findAllByText('Drink coffee');
+    expect(elems.length).toBe(2);
+  }
+  act(() => {
+    ds.update(0, {
+      title: 'DataTable tested',
+      done: false,
+    });
+  });
+  {
+    const elems = await rendering.findAllByText('Drink coffee');
+    expect(elems.length).toBe(2);
+    expect(rendering.queryByText('test DataTable')).toBeNull();
+    const newElems = await rendering.findAllByText('DataTable tested');
+    expect(newElems.length).toBe(2);
+  }
+});
+
+test('open second panel and column visibility', async () => {
+  const ds = createTestDataSource();
+  const ref = createRef<DataTableManager<Todo>>();
+  const rendering = render(
+    <DataTable
+      enableMultiPanels
+      dataSource={ds}
+      columns={columns}
+      tableManagerRef={ref}
+    />,
+  );
+  {
+    const elem = await rendering.findAllByText('test DataTable');
+    expect(elem.length).toBe(1);
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
+      <div
+        class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
+      >
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
+        </div>
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            true
+          </span>
+        </div>
+      </div>
+    `);
+  }
+
+  // toggle column visibility of first table(main panel)
+  act(() => {
+    ref.current?.toggleSideBySide();
+    ref.current?.toggleColumnVisibility('done');
+  });
+  {
+    const elem = await rendering.findAllByText('test DataTable');
+    expect(elem.length).toBe(2);
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
+      <div
+        class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
+      >
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            test DataTable
+          </span>
+        </div>
+      </div>
+    `);
+  }
+
+  act(() => {
+    ds.update(0, {
+      title: 'DataTable tested',
+      done: false,
+    });
+  });
+  {
+    expect(rendering.queryByText('test DataTable')).toBeNull();
+    const elem = await rendering.findAllByText('DataTable tested');
+    expect(elem.length).toBe(2);
+    expect(elem[0].parentElement?.parentElement).toMatchInlineSnapshot(`
+      <div
+        class="ant-dropdown-trigger css-1k3kr6b-TableBodyRowContainer e1luu51r1"
+      >
+        <div
+          class="css-1baxqcf-TableBodyColumnContainer e1luu51r0"
+          width="50%"
+        >
+          <span>
+            <span
+              style="background-color: rgb(255, 245, 102);"
+            />
+            DataTable tested
+          </span>
+        </div>
+      </div>
+    `);
+  }
+});
+
+test('open second panel and closing deletes dataView', async () => {
+  const ds = createTestDataSource();
+  const ref = createRef<DataTableManager<Todo>>();
+  render(
+    <DataTable
+      enableMultiPanels
+      dataSource={ds}
+      columns={columns}
+      tableManagerRef={ref}
+    />,
+  );
+  expect(Object.keys(ds.additionalViews).length).toBe(0);
+  act(() => {
+    ref.current?.toggleSideBySide();
+  });
+  expect(Object.keys(ds.additionalViews).length).toBe(1);
+  act(() => {
+    ref.current?.toggleSideBySide();
+  });
+  expect(Object.keys(ds.additionalViews).length).toBe(0);
 });

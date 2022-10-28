@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,8 @@ import {Width} from '../../utils/widthUtils';
 import {DataFormatter} from '../DataFormatter';
 import {Dropdown} from 'antd';
 import {contextMenuTrigger} from '../data-inspector/DataInspectorNode';
+import {getValueAtPath} from './DataTableManager';
+import {HighlightManager, useHighlighter} from '../Highlight';
 
 // heuristic for row estimation, should match any future styling updates
 export const DEFAULT_ROW_HEIGHT = 24;
@@ -25,7 +27,7 @@ type TableBodyRowContainerProps = {
 
 const backgroundColor = (props: TableBodyRowContainerProps) => {
   if (props.highlighted) {
-    return theme.backgroundWash;
+    return theme.selectionBackgroundColor;
   }
   return undefined;
 };
@@ -72,7 +74,6 @@ const TableBodyColumnContainer = styled.div<{
   multiline?: boolean;
   justifyContent: 'left' | 'right' | 'center';
 }>((props) => ({
-  display: 'block',
   flexShrink: props.width === undefined ? 1 : 0,
   flexGrow: props.width === undefined ? 1 : 0,
   overflow: 'hidden',
@@ -82,6 +83,7 @@ const TableBodyColumnContainer = styled.div<{
   whiteSpace: props.multiline ? 'pre-wrap' : 'nowrap',
   wordWrap: props.multiline ? 'break-word' : 'normal',
   width: props.width,
+  minWidth: 25,
   textAlign: props.justifyContent,
   justifyContent: props.justifyContent,
   '&::selection': {
@@ -108,6 +110,7 @@ export const TableRow = memo(function TableRow<T>({
   highlighted,
   config,
 }: TableRowProps<T>) {
+  const highlighter = useHighlighter();
   const row = (
     <TableBodyRowContainer
       highlighted={highlighted}
@@ -126,6 +129,7 @@ export const TableRow = memo(function TableRow<T>({
             record,
             highlighted,
             itemIndex,
+            highlighter,
           );
 
           return (
@@ -156,8 +160,13 @@ export function renderColumnValue<T>(
   record: T,
   highlighted: boolean,
   itemIndex: number,
+  highlighter?: HighlightManager,
 ) {
   return col.onRender
     ? col.onRender(record, highlighted, itemIndex)
-    : DataFormatter.format((record as any)[col.key], col.formatters);
+    : DataFormatter.format(
+        getValueAtPath(record, col.key),
+        col.formatters,
+        highlighter,
+      );
 }

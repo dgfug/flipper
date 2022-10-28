@@ -1,11 +1,13 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
  * @format
  */
+
+import {DEVICE_ID_STORAGE_KEY} from './consts';
 
 // https://github.com/microsoft/TypeScript/issues/36931#issuecomment-846131999
 type Assert = (condition: unknown) => asserts condition;
@@ -67,4 +69,21 @@ export const detectDevice = (): string => {
   return require('os').release();
 };
 
-export const awaitTimeout = (timeout: number) => new Promise(resolve => setTimeout)
+export const getDeviceId = () => {
+  // localStorage is not defined in Node.js env
+  const persistedId =
+    typeof localStorage === 'object'
+      ? localStorage?.getItem(DEVICE_ID_STORAGE_KEY)
+      : undefined;
+
+  if (persistedId) {
+    return persistedId;
+  }
+
+  const newId = `${Date.now()}.${Math.random()}`;
+  if (typeof localStorage === 'object') {
+    localStorage?.setItem(DEVICE_ID_STORAGE_KEY, newId);
+  }
+
+  return newId;
+};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -38,6 +38,10 @@ class FlipperConnectionManagerMock : public FlipperConnectionManager {
 
   void sendMessage(const folly::dynamic& message) override {
     messages.push_back(message);
+  }
+
+  void sendMessageRaw(const std::string& message) override {
+    messages.push_back(folly::parseJson(message));
   }
 
   void setCertificateProvider(

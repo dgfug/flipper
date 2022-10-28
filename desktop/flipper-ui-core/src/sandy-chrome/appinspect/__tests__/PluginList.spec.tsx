@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,9 +10,9 @@
 import {
   createMockFlipperWithPlugin,
   MockFlipperResult,
-} from '../../../test-utils/createMockFlipperWithPlugin';
+} from '../../../__tests__/test-utils/createMockFlipperWithPlugin';
 import {FlipperPlugin} from '../../../plugin';
-import BaseDevice from '../../../devices/BaseDevice';
+import {BaseDevice, TestDevice} from 'flipper-frontend-core';
 import {_SandyPluginDefinition} from 'flipper-plugin';
 import {TestUtils} from 'flipper-plugin';
 import {selectPlugin} from '../../../reducers/connections';
@@ -32,7 +32,6 @@ import {
   getMetroDevice,
   getPluginLists,
 } from '../../../selectors/connections';
-import {TestDevice} from '../../../test-utils/TestDevice';
 
 const createMockPluginDetails = TestUtils.createMockPluginDetails;
 

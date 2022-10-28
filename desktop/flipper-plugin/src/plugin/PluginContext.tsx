@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,16 +8,20 @@
  */
 
 import {createContext, useContext} from 'react';
-import {SandyPluginInstance, PluginFactory} from './Plugin';
-import {SandyDevicePluginInstance, DevicePluginFactory} from './DevicePlugin';
+import {
+  _SandyDevicePluginInstance,
+  _DevicePluginFactory,
+  _SandyPluginInstance,
+  _PluginFactory,
+} from 'flipper-plugin-core';
 
 export const SandyPluginContext = createContext<
-  SandyPluginInstance | SandyDevicePluginInstance | undefined
+  _SandyPluginInstance | _SandyDevicePluginInstance | undefined
 >(undefined);
 
 export function usePluginInstance():
-  | SandyPluginInstance
-  | SandyDevicePluginInstance {
+  | _SandyPluginInstance
+  | _SandyDevicePluginInstance {
   const pluginInstance = useContext(SandyPluginContext);
   if (!pluginInstance) {
     throw new Error('Sandy Plugin context not available');
@@ -26,14 +30,14 @@ export function usePluginInstance():
 }
 
 export function usePluginInstanceMaybe():
-  | SandyPluginInstance
-  | SandyDevicePluginInstance
+  | _SandyPluginInstance
+  | _SandyDevicePluginInstance
   | undefined {
   return useContext(SandyPluginContext);
 }
 
 export function usePlugin<
-  Factory extends PluginFactory<any, any> | DevicePluginFactory,
+  Factory extends _PluginFactory<any, any, any, any> | _DevicePluginFactory,
 >(plugin: Factory): ReturnType<Factory> {
   const pluginInstance = usePluginInstance();
   // In principle we don't *need* the plugin, but having it passed it makes sure the

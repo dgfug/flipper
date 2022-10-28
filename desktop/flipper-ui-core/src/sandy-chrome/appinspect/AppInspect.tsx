@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,7 +18,7 @@ import ScreenCaptureButtons from '../../chrome/ScreenCaptureButtons';
 import MetroButton from '../../chrome/MetroButton';
 import {BookmarkSection} from './BookmarkSection';
 import Client from '../../Client';
-import BaseDevice from '../../devices/BaseDevice';
+import {BaseDevice} from 'flipper-frontend-core';
 import {ExclamationCircleOutlined, FieldTimeOutlined} from '@ant-design/icons';
 import {useSelector} from 'react-redux';
 import {
@@ -36,9 +36,7 @@ const appTooltip = (
     Inspect apps by selecting connected devices and emulators. Navigate and
     bookmark frequent destinations in the app. Refresh, screenshot and
     screenrecord is also available.{' '}
-    <Link href="https://fbflipper.com/docs/getting-started/index">
-      Learn More
-    </Link>
+    <Link href="https://fbflipper.com/docs/getting-started/">Learn More</Link>
   </>
 );
 

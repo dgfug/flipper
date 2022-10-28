@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,13 +7,13 @@
  * @format
  */
 
-import os from 'os';
 import {VersionCheckResult} from '../chrome/UpdateIndicator';
+import {getRenderHostInstance} from 'flipper-frontend-core';
 
 const updateServer = 'https://www.facebook.com/fbflipper/public/latest.json';
 
 const getPlatformSpecifier = (): string => {
-  switch (os.platform()) {
+  switch (getRenderHostInstance().serverConfig.environmentInfo.os.platform) {
     case 'win32':
       return 'windows';
     case 'linux':

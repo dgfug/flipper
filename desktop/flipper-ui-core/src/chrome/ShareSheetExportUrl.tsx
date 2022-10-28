@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,9 +13,9 @@ import {ReactReduxContext, ReactReduxContextValue} from 'react-redux';
 import {Logger} from 'flipper-common';
 import {IdlerImpl} from '../utils/Idler';
 import {
-  shareFlipperData,
   DataExportResult,
   DataExportError,
+  shareFlipperData,
 } from '../fb-stubs/user';
 import {
   exportStore,
@@ -24,10 +24,8 @@ import {
 } from '../utils/exportData';
 import ShareSheetErrorList from './ShareSheetErrorList';
 import {reportPlatformFailures} from 'flipper-common';
-import {performance} from 'perf_hooks';
 import ShareSheetPendingDialog from './ShareSheetPendingDialog';
 import {getLogger} from 'flipper-common';
-import {resetSupportFormV2State} from '../reducers/supportForm';
 import {MiddlewareAPI} from '../reducers/index';
 import {getFlipperLib, Layout} from 'flipper-plugin';
 import {Button, Modal} from 'antd';
@@ -122,7 +120,6 @@ export default class ShareSheetExportUrl extends Component<Props, State> {
         });
       }
       this.setState({fetchMetaDataErrors, result});
-      this.store.dispatch(resetSupportFormV2State());
       this.props.logger.trackTimeSince(mark, 'export:url-success');
     } catch (e) {
       const result: DataExportError = {

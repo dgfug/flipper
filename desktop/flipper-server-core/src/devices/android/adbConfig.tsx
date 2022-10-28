@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,7 @@
 
 import {parseEnvironmentVariableAsNumber} from '../../utils/environmentVariables';
 
-export default () => {
+export default (settings?: {host?: string; port?: number}) => {
   let port = parseEnvironmentVariableAsNumber(
     'ANDROID_ADB_SERVER_PORT',
     5037,
@@ -25,6 +25,9 @@ export default () => {
       port = parseInt(match[3], 10);
     }
   }
+
+  host = settings?.host ?? host;
+  port = settings?.port ?? port;
 
   return {
     port,

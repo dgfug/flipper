@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,26 +9,37 @@
 
 import React, {memo, useEffect, createElement} from 'react';
 import {SandyPluginContext} from './PluginContext';
-import {SandyPluginInstance} from './Plugin';
-import {SandyDevicePluginInstance} from './DevicePlugin';
-import {BasePluginInstance} from './PluginBase';
+import {
+  _SandyPluginInstance,
+  _SandyDevicePluginInstance,
+  _BasePluginInstance,
+} from 'flipper-plugin-core';
 import {TrackingScope} from '../ui/Tracked';
 
 type Props = {
-  plugin: SandyPluginInstance | SandyDevicePluginInstance;
+  plugin: _SandyPluginInstance | _SandyDevicePluginInstance;
 };
 
 /**
  * Component to render a Sandy plugin container
  */
 export const SandyPluginRenderer = memo(({plugin}: Props) => {
-  if (!plugin || !(plugin instanceof BasePluginInstance)) {
+  if (!plugin || !(plugin instanceof _BasePluginInstance)) {
     throw new Error('Expected plugin, got ' + plugin);
   }
   useEffect(() => {
+    const style = document.createElement('style');
+    if (plugin.definition.css) {
+      style.innerText = plugin.definition.css;
+      document.head.appendChild(style);
+    }
+
     plugin.activate();
     return () => {
       plugin.deactivate();
+      if (plugin.definition.css) {
+        document.head.removeChild(style);
+      }
     };
   }, [plugin]);
 

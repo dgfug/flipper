@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -36,6 +36,19 @@ public class FlipperConnectionMock implements FlipperConnection {
 
   @Override
   public void send(String method, FlipperArray params) {
+    final List<Object> paramList;
+    if (sent.containsKey(method)) {
+      paramList = sent.get(method);
+    } else {
+      paramList = new ArrayList<>();
+      sent.put(method, paramList);
+    }
+
+    paramList.add(params);
+  }
+
+  @Override
+  public void send(String method, String params) {
     final List<Object> paramList;
     if (sent.containsKey(method)) {
       paramList = sent.get(method);

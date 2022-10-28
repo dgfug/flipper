@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,43 +7,25 @@
  * @format
  */
 
-import {isTest} from 'flipper-common';
-import {parseFlipperPorts} from './utils/environmentVariables';
-
-export interface FlipperServerConfig {
-  enableAndroid: boolean;
-  androidHome: string;
-  enableIOS: boolean;
-  idbPath: string;
-  enablePhysicalIOS: boolean;
-  validWebSocketOrigins: string[];
-  staticPath: string;
-  tmpPath: string;
-}
-
-// defaultConfig should be used for testing only, and disables by default all features
-const testConfig: FlipperServerConfig = {
-  androidHome: '',
-  enableAndroid: false,
-  enableIOS: false,
-  enablePhysicalIOS: false,
-  idbPath: '',
-  validWebSocketOrigins: [],
-  staticPath: '/static/',
-  tmpPath: '/temp/',
-};
+import {FlipperServerConfig} from 'flipper-common';
+import {
+  parseEnvironmentVariableAsNumber,
+  parseFlipperPorts,
+} from './utils/environmentVariables';
 
 let currentConfig: FlipperServerConfig | undefined = undefined;
 
+// just an ugly utility to not need a reference to FlipperServerImpl itself everywhere
 export function getFlipperServerConfig(): FlipperServerConfig {
   if (!currentConfig) {
-    if (isTest()) return testConfig;
     throw new Error('FlipperServerConfig has not been set');
   }
   return currentConfig;
 }
 
-export function setFlipperServerConfig(config: FlipperServerConfig) {
+export function setFlipperServerConfig(
+  config: FlipperServerConfig | undefined,
+) {
   currentConfig = config;
 }
 
@@ -55,6 +37,7 @@ type ServerPorts = {
 export function getServerPortsConfig(): {
   serverPorts: ServerPorts;
   altServerPorts: ServerPorts;
+  browserPort: number;
 } {
   let portOverrides: ServerPorts | undefined;
   if (process.env.FLIPPER_PORTS) {
@@ -80,6 +63,20 @@ export function getServerPortsConfig(): {
     }
   }
 
+  let portBrowserOverride: number | undefined;
+  if (process.env.FLIPPER_BROWSER_PORT) {
+    portBrowserOverride = parseEnvironmentVariableAsNumber(
+      'FLIPPER_BROWSER_PORT',
+    );
+    if (!portBrowserOverride) {
+      console.error(
+        `Ignoring malformed FLIPPER_BROWSER_PORT env variable:
+          "${process.env.FLIPPER_BROWSER_PORT || ''}".
+          Example expected format: "1111".`,
+      );
+    }
+  }
+
   return {
     serverPorts: portOverrides ?? {
       insecure: 8089,
@@ -89,5 +86,6 @@ export function getServerPortsConfig(): {
       insecure: 9089,
       secure: 9088,
     },
+    browserPort: portBrowserOverride ?? 8333,
   };
 }

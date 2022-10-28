@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,11 +8,18 @@
  */
 
 import {FlipperErrorMessage, FlipperMessageBus} from './message';
-import {FlipperPluginConnection, FlipperPluginReceiver} from './plugin';
+import {
+  FlipperPluginConnection,
+  FlipperPluginReceiver,
+  FlipperPluginReceiverRes,
+} from './plugin';
 import {FlipperResponder} from './responder';
 import {isPromise, safeJSONStringify} from './util';
 
-type FlipperReceiver = (data: unknown, responder: FlipperResponder) => void;
+type FlipperReceiver = (
+  data: FlipperPluginReceiverRes,
+  responder: FlipperResponder,
+) => void;
 
 export class FlipperConnection implements FlipperPluginConnection {
   pluginId: string;
@@ -36,7 +43,10 @@ export class FlipperConnection implements FlipperPluginConnection {
   }
 
   receive(method: string, receiver: FlipperPluginReceiver) {
-    const wrappedReceiver: FlipperReceiver = (data, responder) => {
+    const wrappedReceiver: FlipperReceiver = (
+      data: FlipperPluginReceiverRes,
+      responder,
+    ) => {
       const handleError = (e: unknown) => {
         const errorMessage: FlipperErrorMessage =
           e instanceof Error
@@ -47,7 +57,9 @@ export class FlipperConnection implements FlipperPluginConnection {
       try {
         const response = receiver(data);
         if (isPromise(response)) {
-          response.then((data) => responder.success(data)).catch(handleError);
+          response
+            .then((data: FlipperPluginReceiverRes) => responder.success(data))
+            .catch(handleError);
           return;
         }
         responder.success(response);

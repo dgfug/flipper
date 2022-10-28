@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Mobile development tool",
   "productName": "Flipper",
-  "author": "Facebook Inc",
+  "author": "Meta",
   "main": "src/index.tsx",
   "icon": "icon.png",
   "category": "facebook-intern",
@@ -15,14 +15,20 @@
   },
   "dependencies": {
     "flipper-common": "0.0.0",
+    "flipper-server-companion": "0.0.0",
     "flipper-server-core": "0.0.0",
+    "flipper-frontend-core": "0.0.0",
     "flipper-ui-core": "0.0.0",
+    "fs-extra": "^10.1.0",
     "invariant": "^2.2.2",
-    "metro-runtime": "^0.66.2",
-    "pretty-format": "^27.3.1"
+    "metro-runtime": "^0.70.2",
+    "pretty-format": "^27.5.0",
+    "reconnecting-websocket": "^4.4.0",
+    "ws": "8.8.0"
   },
   "optionalDependencies": {},
   "devDependencies": {
-    "react-refresh": "^0.10.0"
+    "@types/node": "^17.0.31",
+    "react-refresh": "^0.11.0"
   }
 }

@@ -9,8 +9,19 @@
   "types": "lib/index.d.ts",
   "license": "MIT",
   "bugs": "https://github.com/facebook/flipper/issues",
-  "dependencies": {},
-  "devDependencies": {},
+  "dependencies": {
+    "reconnecting-websocket": "^4.4.0"
+  },
+  "devDependencies": {
+    "eventemitter3": "^4.0.7",
+    "flipper-common": "0.0.0",
+    "flipper-frontend-core": "0.0.0",
+    "flipper-ui-core": "0.0.0",
+    "invariant": "^2.2.4",
+    "metro-runtime": "^0.70.2",
+    "pretty-format": "^27.5.0",
+    "react-refresh": "^0.10.0"
+  },
   "peerDependencies": {},
   "scripts": {
     "reset": "rimraf lib *.tsbuildinfo",

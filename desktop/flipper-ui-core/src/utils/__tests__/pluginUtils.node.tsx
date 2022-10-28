@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,7 @@
 
 import {getPluginKey} from '../pluginKey';
 import {FlipperPlugin, FlipperDevicePlugin} from '../../plugin';
-import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
+import {createMockFlipperWithPlugin} from '../../__tests__/test-utils/createMockFlipperWithPlugin';
 import {getExportablePlugins} from '../../selectors/connections';
 
 function createMockFlipperPluginWithDefaultPersistedState(id: string) {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -128,7 +128,7 @@ export default class Inspector extends Component<Props, State> {
         this.updateElement(root.id, {...root, expanded: true});
         this.performInitialExpand(root);
       })
-      .catch((e) => console.error('[layout] GET_ROOT failed:', e));
+      .catch((e) => console.debug('[Layout] getRoot failed:', e));
 
     this.props.client.subscribe(
       this.call().INVALIDATE,
@@ -281,7 +281,7 @@ export default class Inspector extends Component<Props, State> {
   // When opening the inspector for the first time, expand all elements that
   // contain only 1 child recursively.
   async performInitialExpand(element: Element | undefined): Promise<void> {
-    if (!element || !element.children.length) {
+    if (!element || !element.children || !element.children.length) {
       // element has no children so we're as deep as we can be
       return;
     }
@@ -319,7 +319,7 @@ export default class Inspector extends Component<Props, State> {
           selected: false,
         })
         .catch((e) => {
-          console.error(`[Layout] Failed to fetch nodes from app:`, e);
+          console.debug(`[Layout] Failed to fetch nodes from app:`, e);
           return {elements: []};
         });
       if (!elements) {
@@ -414,10 +414,15 @@ export default class Inspector extends Component<Props, State> {
     if (!this.props.client.isConnected) {
       return;
     }
-    this.props.client.call(this.call().SET_HIGHLIGHTED, {
-      id: key,
-      isAlignmentMode: this.props.inAlignmentMode,
-    });
+    if (key === undefined || key == null) {
+      return;
+    }
+    this.props.client
+      .call(this.call().SET_HIGHLIGHTED, {
+        id: key,
+        isAlignmentMode: this.props.inAlignmentMode,
+      })
+      .catch((e) => console.debug('[Layout] setHighlighted failed:', e));
   });
 
   onElementExpanded = (
@@ -437,7 +442,7 @@ export default class Inspector extends Component<Props, State> {
           );
         }
       })
-      .catch((e) => console.error('[layout] getChildren failed:', e));
+      .catch((e) => console.debug('[Layout] getChildren failed:', e));
     if (!shouldExpand) {
       this.updateElement(id, {expanded: shouldExpand});
     }
